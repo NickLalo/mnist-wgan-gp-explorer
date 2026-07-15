@@ -1,5 +1,11 @@
 # Python / UV
 .venv/
+browser/dist/
+browser/index.html
+browser/node_modules/
+browser/playwright-report/
+browser/public/favicon.svg
+browser/test-results/
 __pycache__/
 *.py[cod]
 .pytest_cache/

@@ -4,6 +4,8 @@
 
 **A project for exploring WGAN-GP conditional generation with MNIST.**
 
+[**Explore the model in your browser →**](https://nicklalo.github.io/mnist-wgan-gp-explorer/)
+
 </div>
 
 <p align="center">
@@ -51,6 +53,10 @@ stored elsewhere:
 ```bash
 ./run.sh --checkpoint /path/to/model.ckpt
 ```
+
+The linked GitHub Pages demo provides the same three exploration modes using private ONNX
+inference inside the visitor's browser—no Python service, uploaded inputs, or server-side model is
+involved. Its independent implementation lives in [`browser/`](browser/README.md).
 
 ## Train your own model
 
@@ -297,6 +303,8 @@ src/mnist_wgan/
   static/            Browser interface and favicon
 checkpoints/          Bundled inference checkpoint
 docs/assets/          README screenshots and animation
+browser/              Static ONNX Runtime application and GitHub Pages build
+scripts/              Reproducible browser-model export
 tests/                Focused unit tests
 artifacts/            Local checkpoints, reports, grids, and logs (Git-ignored)
 data/                 Downloaded MNIST files (Git-ignored)

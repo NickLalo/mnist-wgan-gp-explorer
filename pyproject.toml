@@ -32,6 +32,11 @@ build-backend = "hatchling.build"
 packages = ["src/mnist_wgan"]
 
 [dependency-groups]
+browser-export = [
+    "onnx>=1.22.0",
+    "onnxruntime>=1.27.0",
+    "onnxscript>=0.7.1",
+]
 dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",

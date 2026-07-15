@@ -1,0 +1,40 @@
+{
+  "format_version": 1,
+  "checkpoint": "mnist-wgan-gp-inference.ckpt",
+  "checkpoint_sha256": "fdb9dd4861ecf114dd8620211a34a5b558a4883d38600fef5e709840f6655975",
+  "latent_dim": 96,
+  "models": {
+    "generator": {
+      "path": "generator.onnx",
+      "bytes": 3879336,
+      "sha256": "9eb7034d99cf05b8cee67a4186015524aea84792a6450b1e38a492c2b4bc8049"
+    },
+    "quality_scorer": {
+      "path": "quality-scorer.onnx",
+      "bytes": 4635163,
+      "sha256": "01f97852d0967eb2418e687284a4849843162a3093020ef93b7ddbc413a36b2e"
+    }
+  },
+  "sampling": {
+    "quality_oversample": 1.2,
+    "quality_rejection_threshold": 0.15,
+    "detached_ink_threshold": 0.1,
+    "unsupported_ink_threshold": 0.03
+  },
+  "rendering": {
+    "paper_color": "#e8e5da",
+    "ink_color": "#082a22"
+  },
+  "verification_max_absolute_error": {
+    "generator": {
+      "images": 5.066394805908203e-06
+    },
+    "quality_scorer": {
+      "critic_scores": 1.9073486328125e-06,
+      "logits": 3.814697265625e-06,
+      "unsupported": 3.725290298461914e-09,
+      "disconnected": 7.729977369308472e-08,
+      "profiles": 7.152557373046875e-07
+    }
+  }
+}
