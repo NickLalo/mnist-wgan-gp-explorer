@@ -41,12 +41,23 @@ const interceptionBootstrap = `
   </script>
   <script type="module" src="/src/main.js"></script>`;
 
+const analyticsBootstrap = `
+  <script>
+    if (window.location.hostname === 'nicklalo.github.io') {
+      const analytics = document.createElement('script');
+      analytics.defer = true;
+      analytics.src = 'https://static.cloudflareinsights.com/beacon.min.js';
+      analytics.dataset.cfBeacon = JSON.stringify({token: '1cca41536fb649218b67d2b5127fe973'});
+      document.head.append(analytics);
+    }
+  </script>`;
+
 let html = await readFile(sourceHtml, 'utf8');
 html = html.replace(
   '<link rel="icon" href="/favicon.ico?v=2" type="image/x-icon" sizes="any">',
   '<link rel="icon" href="./favicon.svg?v=3" type="image/svg+xml">',
 );
-html = html.replace('</head>', `${interceptionBootstrap}\n</head>`);
+html = html.replace('</head>', `${interceptionBootstrap}\n${analyticsBootstrap}\n</head>`);
 
 await mkdir(publicDirectory, {recursive: true});
 await rm(path.join(publicDirectory, 'ort'), {recursive: true, force: true});

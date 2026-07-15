@@ -29,6 +29,7 @@ test('all three modes generate locally without API network traffic', async ({pag
   });
 
   await page.goto('/');
+  await expect(page.locator('script[src*="cloudflareinsights"]')).toHaveCount(0);
   await expect(page.locator('#allStatus')).toBeVisible();
   await expect(page.locator('#allStatus')).toHaveClass(/generating/);
   await expect(page.locator('#allStatus')).toContainText('Generating Numbers');
