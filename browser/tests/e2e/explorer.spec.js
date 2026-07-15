@@ -64,3 +64,38 @@ test('all three modes generate locally without API network traffic', async ({pag
   expect(apiRequests).toEqual([]);
   expect(consoleErrors).toEqual([]);
 });
+
+test.describe('phone layout', () => {
+  test.use({viewport: {width: 390, height: 844}, isMobile: true, hasTouch: true});
+
+  test('keeps controls and both latent explorer panels within the viewport', async ({page}) => {
+    const fitsViewport = selector => page.locator(selector).evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      return rect.left >= 0 && rect.right <= window.innerWidth + 1 && element.scrollWidth <= element.clientWidth + 1;
+    });
+
+    await page.goto('/');
+    await waitForGeneratedImage(page, '#allImage');
+    expect(await fitsViewport('#allPanel .controls')).toBe(true);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+    await page.locator('[data-panel="onePanel"]').click();
+    await waitForGeneratedImage(page, '#oneImage');
+    expect(await fitsViewport('#onePanel .controls')).toBe(true);
+
+    await page.locator('[data-panel="explorePanel"]').click();
+    await waitForGeneratedImage(page, '#exploreImage');
+    expect(await fitsViewport('#explorePanel .controls')).toBe(true);
+    expect(await fitsViewport('#exploreLayout')).toBe(true);
+
+    const latentModule = await elementGeometry(page.locator('.latent-module'));
+    const outputModule = await elementGeometry(page.locator('.output-module'));
+    const pad = await elementGeometry(page.locator('#pad'));
+    const sample = await elementGeometry(page.locator('#exploreImage'));
+    expect(outputModule.y).toBeGreaterThanOrEqual(latentModule.y + latentModule.height);
+    expect(pad.width).toBeGreaterThan(240);
+    expect(sample.width).toBeGreaterThan(300);
+    await expect(page.locator('#newPlane')).toHaveCSS('min-height', '42px');
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  });
+});
