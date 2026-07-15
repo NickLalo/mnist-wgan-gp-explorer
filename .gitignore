@@ -1,0 +1,17 @@
+# Python / UV
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+/dist/
+
+# Training artifacts and data
+/data/
+/artifacts/
+/lightning_logs/
+
+# Local environment
+.env
+.DS_Store

@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MNIST WGAN-GP Explorer</title>
+  <link rel="icon" href="/favicon.ico?v=2" type="image/x-icon" sizes="any">
+  <style>
+    :root { --paper:#f3eee3; --paper-light:#fffaf0; --paper-dark:#e2d8c7; --ink:#292725;
+      --muted:#716a60; --mint:#96c9ad; --lavender:#9d91b8; --coral:#d98269; --yellow:#dfbd68; }
+    * { box-sizing:border-box; scrollbar-color:var(--ink) var(--paper-dark); }
+    body { margin:0; min-height:100vh; color:var(--ink); background:var(--paper);
+      font:15px/1.45 Inter,ui-sans-serif,system-ui,sans-serif; color-scheme:light; }
+    main { width:calc(100% - 24px); height:100dvh; margin:auto; padding:9px 0 12px; display:flex; flex-direction:column; overflow:hidden; }
+    header { flex:0 0 auto; min-height:42px; display:flex; align-items:center; gap:16px; padding:0 0 6px; border-bottom:2px solid var(--ink); }
+    .brand { display:flex; align-items:center; white-space:nowrap; }
+    h1 { margin:0 3px 3px 0; padding:5px 9px 4px; border:2px solid var(--ink); color:var(--ink); background:var(--yellow); box-shadow:3px 3px 0 var(--ink);
+      font:750 25px/1 ui-serif,Georgia,serif; letter-spacing:-.03em; }
+    header p { flex:1; margin:0; color:var(--muted); font:italic 12px/1.25 ui-serif,Georgia,serif; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .tabs { position:relative; z-index:2; flex:0 0 auto; display:flex; align-items:flex-end; gap:5px; margin:4px 0 -2px; overflow:auto; padding:0 4px 4px 0; }
+    .tab { border:2px solid var(--ink); border-radius:3px 3px 0 0; padding:7px 13px; color:var(--ink); background:var(--paper-dark); box-shadow:2px 2px 0 var(--ink);
+      cursor:pointer; font:800 12px/1.15 ui-monospace,SFMono-Regular,Menlo,monospace; text-transform:uppercase; letter-spacing:.02em; }
+    .tab:hover { background:var(--paper-light); }
+    .tab.active { background:var(--mint); box-shadow:none; transform:translate(2px,2px); }
+    .panel { display:none; margin:0 5px 5px 0; overflow:hidden; background:var(--paper-light); border:2px solid var(--ink); border-radius:4px; box-shadow:4px 4px 0 var(--ink); }
+    .panel.active { flex:1 1 0; min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr); grid-template-columns:minmax(0,1fr); }
+    .controls { position:relative; z-index:5; min-width:0; display:grid; align-items:center; gap:11px; padding:9px 12px 10px; border-bottom:2px solid var(--ink); background:var(--paper-dark); }
+    #allPanel .controls { grid-template-columns:190px minmax(250px,1.5fr) 110px minmax(250px,1fr); }
+    #onePanel .controls { grid-template-columns:180px 72px minmax(250px,1.5fr) minmax(150px,.65fr) 105px minmax(260px,1fr); }
+    #explorePanel .controls { grid-template-columns:280px 72px 105px minmax(180px,1fr) minmax(180px,1fr) auto; }
+    .control-intro { align-self:center; min-width:0; padding:3px 0 3px 10px; border-left:6px solid var(--coral); }
+    .control-intro h2 { margin:0 0 2px; font:800 16px/1.1 ui-serif,Georgia,serif; }
+    .control-intro p { margin:0; color:var(--muted); font:11px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .explorer-heading { display:flex; align-items:center; gap:8px; margin-bottom:3px; }
+    .explorer-heading h2 { margin:0; }
+    .explore-guide { border-left-color:var(--yellow); }
+    .explore-guide h2 { font:900 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.08em; text-transform:uppercase; }
+    .experiment-tag { padding:2px 5px; border:2px solid var(--ink); border-radius:1px; color:var(--ink); background:var(--yellow);
+      font:900 8px/1 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.07em; text-transform:uppercase; transform:rotate(-1deg); }
+    .control-intro .experiment-copy { color:#8b4f3d; line-height:1.25; white-space:normal; overflow:visible; }
+    .control-field { min-width:0; padding:5px 7px 6px; border:2px solid var(--ink); background:var(--paper-light); box-shadow:2px 2px 0 var(--ink); }
+    .control-hint { align-self:center; padding-left:9px; border-left:3px solid var(--lavender); color:var(--muted); font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    label { display:block; margin:0 0 4px; color:var(--ink); font:850 9px/1.1 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
+    select,input[type=number],input.digit-input { width:100%; height:32px; padding:5px 8px; border:2px solid var(--ink); border-radius:1px; color:var(--ink); background:#fffdf7; font:14px/1 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    input:focus-visible,button:focus-visible { outline:3px solid var(--coral); outline-offset:2px; }
+    input[type=range] { width:100%; height:18px; margin:0; appearance:none; background:transparent; }
+    input[type=range]::-webkit-slider-runnable-track { height:6px; border:2px solid var(--ink); background:#fffdf7; }
+    input[type=range]::-webkit-slider-thumb { width:16px; height:16px; margin-top:-7px; appearance:none; border:2px solid var(--ink); border-radius:1px; background:var(--lavender); box-shadow:2px 2px 0 var(--ink); }
+    input[type=range]::-moz-range-track { height:3px; border:2px solid var(--ink); background:#fffdf7; }
+    input[type=range]::-moz-range-thumb { width:13px; height:13px; border:2px solid var(--ink); border-radius:1px; background:var(--lavender); box-shadow:2px 2px 0 var(--ink); }
+    .slider-tooltip { position:relative; }
+    .slider-tooltip::after { content:attr(data-tooltip); position:absolute; z-index:20; top:calc(100% + 10px); left:50%; width:max-content; max-width:280px; padding:7px 9px;
+      border:2px solid var(--ink); border-radius:1px; color:var(--ink); background:var(--yellow); box-shadow:3px 3px 0 var(--ink); font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;
+      text-align:left; opacity:0; pointer-events:none; transform:translate(-50%,-3px); transition:opacity .12s ease,transform .12s ease; }
+    .slider-tooltip:hover::after { opacity:1; transform:translate(-50%,0); }
+    button.action { width:auto; height:36px; margin:0 2px 2px 0; padding:0 14px; border:2px solid var(--ink); border-radius:2px; color:var(--ink); background:var(--coral);
+      box-shadow:3px 3px 0 var(--ink); cursor:pointer; font:850 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace; text-transform:uppercase; white-space:nowrap; }
+    button.action:hover { transform:translate(1px,1px); box-shadow:2px 2px 0 var(--ink); }
+    .output { position:relative; min-width:0; min-height:0; display:grid; place-items:center; padding:9px; overflow:auto; background:var(--paper-dark); }
+    .output img { max-width:100%; max-height:700px; border:2px solid var(--ink); border-radius:0; background:#e8e5da; box-shadow:3px 3px 0 var(--ink); image-rendering:pixelated; }
+    #allPanel .output { display:block; overflow:auto; scrollbar-gutter:stable both-edges; }
+    #allImage { display:block; width:auto; height:100%; max-width:none; max-height:100%; margin:0; }
+    #onePanel .output { display:block; overflow:auto; scrollbar-gutter:stable; }
+    #onePanel .output.one-grid-fits { display:grid; align-items:center; }
+    #oneImage { display:block; width:100%; height:auto; max-width:none; max-height:none; margin:0; }
+    .loading { opacity:.45; }
+    .request-status { position:absolute; z-index:4; top:12px; right:12px; display:none; max-width:min(420px,calc(100% - 24px)); padding:8px 10px;
+      border:2px solid var(--ink); border-radius:1px; color:var(--ink); background:var(--yellow); box-shadow:3px 3px 0 var(--ink); font:11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .request-status.visible { display:block; }
+    .request-status.error { color:#642f27; background:#efb0a2; }
+    #explorePanel .output { overflow:hidden; }
+    .explore-layout { width:100%; height:100%; min-height:0; display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); align-items:stretch; gap:24px; overflow:hidden; }
+    .explorer-module { min-width:0; min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr); padding:10px; border:2px solid var(--ink); border-radius:2px; background:var(--paper-light); box-shadow:3px 3px 0 var(--ink); }
+    .module-title { margin:0 0 9px; padding:0 0 7px; border-bottom:2px solid var(--ink); color:var(--ink); font:900 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.09em; text-transform:uppercase; }
+    .module-title span { display:inline-block; margin-right:7px; padding:2px 4px; background:var(--mint); border:1px solid var(--ink); }
+    .plane-content { width:100%; height:100%; min-height:0; display:flex; justify-content:center; align-items:stretch; gap:10px; }
+    .plane-stack { flex:0 1 640px; width:640px; min-width:0; min-height:0; display:grid; grid-template-rows:minmax(0,1fr) auto; justify-items:center; }
+    .plane-stage,.sample-stage { width:100%; min-width:0; min-height:0; display:grid; place-items:center; }
+    .plane-stage { place-items:start center; }
+    .sample-stage { height:100%; }
+    #pad { width:560px; height:560px; max-width:100%; max-height:100%; border:3px solid var(--ink); border-radius:3px; cursor:crosshair; touch-action:none; box-shadow:4px 4px 0 var(--ink); outline:none; }
+    #pad:focus-visible { outline:3px solid var(--coral); outline-offset:2px; }
+    .distance-legend { flex:0 0 112px; width:112px; height:560px; max-height:100%; align-self:start; padding:0; }
+    .legend-scale { height:100%; min-height:0; display:grid; grid-template-columns:38px minmax(0,1fr); gap:9px; }
+    .legend-bar { position:relative; min-height:100px; display:flex; flex-direction:column; border:2px solid var(--ink); border-radius:1px; box-shadow:2px 2px 0 var(--ink); overflow:visible; }
+    .legend-swatch { flex:1 1 0; }
+    .legend-swatch:nth-child(1) { background:#082a22; } .legend-swatch:nth-child(2) { background:#1d4e3f; }
+    .legend-swatch:nth-child(3) { background:#306f57; } .legend-swatch:nth-child(4) { background:#41916c; }
+    .legend-swatch:nth-child(5) { background:#4eac7e; } .legend-swatch:nth-child(6) { background:#72bf99; }
+    .legend-swatch:nth-child(7) { background:#96d1b2; } .legend-swatch:nth-child(8) { background:#b8e2ca; }
+    .legend-swatch:nth-child(9) { background:#d8f3df; }
+    .legend-marker { position:absolute; z-index:2; left:-5px; right:-5px; bottom:0; height:4px; border:1px solid var(--ink); background:var(--coral); box-shadow:1px 1px 0 var(--ink); transition:bottom .12s ease; }
+    .legend-ticks { display:flex; flex-direction:column; justify-content:space-around; color:var(--muted); font:12px/1 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .legend-tick { padding-left:2px; transition:color .12s ease,font-weight .12s ease; }
+    .legend-tick.active { color:var(--ink); font-weight:900; text-decoration:underline; text-decoration-thickness:2px; }
+    #exploreImage { width:560px; height:560px; max-width:100%; max-height:100%; object-fit:contain; justify-self:center; border-width:3px; }
+    .coords { justify-self:center; margin-top:9px; padding:2px 8px; border:2px solid var(--ink); color:var(--muted); background:var(--paper); box-shadow:2px 2px 0 var(--ink);
+      font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace; font-variant-numeric:tabular-nums; text-align:center; }
+    #distanceState { margin-left:7px; font-weight:900; }
+    @media (max-width:1300px) {
+      .control-hint { display:none; }
+      #allPanel .controls { grid-template-columns:170px minmax(220px,1fr) 100px; }
+      #onePanel .controls { grid-template-columns:155px 68px minmax(220px,1fr) minmax(130px,.6fr) 95px; }
+      #explorePanel .controls { grid-template-columns:235px 68px 95px minmax(150px,1fr) minmax(150px,1fr) auto; }
+    }
+    @media (max-width:1100px) {
+      #explorePanel .output { display:block; overflow:auto; }
+      .explore-layout { height:auto; grid-template-columns:minmax(0,1fr); overflow:visible; }
+      .explorer-module { min-height:620px; }
+    }
+    @media (max-width:900px) {
+      main { width:calc(100% - 14px); padding:6px 0 9px; }
+      header { min-height:40px; padding-bottom:6px; } header p { display:none; }
+      .controls,#allPanel .controls,#onePanel .controls,#explorePanel .controls { display:flex; align-items:center; gap:11px; overflow-x:auto; }
+      .control-intro { flex:0 0 145px; } .control-field { flex:0 0 165px; }
+      #explorePanel .control-intro { flex-basis:265px; }
+      .control-field.compact { flex-basis:82px; } .control-hint { display:none; }
+      .explore-layout { gap:16px; }
+    }
+    @media (max-height:700px) {
+      header p { display:none; } .control-intro p { display:none; }
+      .controls { padding-top:7px; padding-bottom:8px; }
+    }
+  </style>
+</head>
+<body><main>
+  <header><div class="brand"><h1>MNIST WGAN-GP Explorer</h1></div>
+    <p>Generate digit families, study one class, or navigate a continuous latent plane.</p></header>
+  <nav class="tabs">
+    <button class="tab active" data-panel="allPanel">All digits</button>
+    <button class="tab" data-panel="onePanel">One digit</button>
+    <button class="tab" data-panel="explorePanel">Latent explorer</button>
+  </nav>
+
+  <section id="allPanel" class="panel active"><div class="controls">
+    <div class="control-intro"><h2>Ten digit rows</h2><p>One class per row</p></div>
+    <div class="control-field"><label for="allSamples">Samples per digit · <span id="allValue">20</span></label>
+      <div class="slider-tooltip" data-tooltip="Hover over the slider, hold Shift, and scroll to adjust by 1."><input id="allSamples" type="range" min="1" max="100" value="20"></div></div>
+    <div class="control-field compact"><label for="allSeed">Seed</label><input id="allSeed" type="number" min="0" value="112"></div>
+    <div class="control-hint">Hover over the slider, hold Shift, and scroll to adjust by 1</div></div>
+    <div class="output"><div id="allStatus" class="request-status" role="status" aria-live="polite"></div><img id="allImage" alt="Ten rows of generated MNIST digits"></div></section>
+
+  <section id="onePanel" class="panel"><div class="controls">
+    <div class="control-intro"><h2>Single-class study</h2><p>Type or press 0–9</p></div>
+    <div class="control-field compact"><label for="oneDigit">Digit</label><input id="oneDigit" class="digit-input" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" autocomplete="off" value="3"></div>
+    <div class="control-field"><label for="oneSamples">Samples · <span id="oneValue">240</span></label>
+      <div class="slider-tooltip" data-tooltip="Hover over the slider, hold Shift, and scroll to adjust by 1."><input id="oneSamples" type="range" min="1" max="5000" value="240"></div></div>
+    <div class="control-field"><label for="oneZoom">Grid zoom · <span id="oneZoomValue">50%</span></label>
+      <input id="oneZoom" type="range" min="1" max="4" step="1" value="2"></div>
+    <div class="control-field compact"><label for="oneSeed">Seed</label><input id="oneSeed" type="number" min="0" value="112"></div>
+    <div class="control-hint">Up to 5,000 samples</div></div>
+    <div class="output"><div id="oneStatus" class="request-status" role="status" aria-live="polite"></div><img id="oneImage" alt="Samples of one generated MNIST digit"></div></section>
+
+  <section id="explorePanel" class="panel"><div class="controls">
+    <div class="control-intro explore-guide"><div class="explorer-heading"><span class="experiment-tag">Experimental</span><h2>How to explore</h2></div><p class="experiment-copy">Type 0–9. Drag or use arrow keys/WASD. Ctrl+scroll changes bounds; distance from center makes inputs more unusual.</p></div>
+    <div class="control-field compact"><label for="exploreDigit">Digit</label><input id="exploreDigit" class="digit-input" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" autocomplete="off" value="3"></div>
+    <div class="control-field compact"><label for="exploreSeed">Plane seed</label><input id="exploreSeed" type="number" min="0" value="112"></div>
+    <div class="control-field"><label for="areaLimit">Plane limit · ±<span id="areaValue">1.50</span></label>
+      <input id="areaLimit" type="range" min="0.50" max="10.00" step="0.05" value="1.50"></div>
+    <div class="control-field"><label for="nudgeAmount">Key movement · <span id="nudgeValue">0.17</span></label>
+      <input id="nudgeAmount" type="range" min="0.01" max="0.50" step="0.01" value="0.17"></div>
+    <button class="action" id="newPlane">Reset</button></div>
+    <div class="output">
+      <div id="exploreStatus" class="request-status" role="status" aria-live="polite"></div>
+      <div id="exploreLayout" class="explore-layout">
+        <section class="explorer-module latent-module" aria-labelledby="latentPlaneTitle">
+          <h3 id="latentPlaneTitle" class="module-title"><span>01</span>Latent plane</h3>
+          <div id="planeContent" class="plane-content">
+            <div class="plane-stack">
+              <div id="planeStage" class="plane-stage"><canvas id="pad" width="560" height="560" tabindex="0" aria-label="Labeled x and y latent plane; drag or use arrow keys or WASD to navigate, or hold Control and scroll to change the bounds"></canvas></div>
+              <div class="coords"><span id="coords">x 0.00 · y 0.00</span><span id="distanceState">Familiar</span></div>
+            </div>
+            <aside id="distanceLegend" class="distance-legend" aria-label="Latent input distance: familiar, exploring, unusual, and extreme">
+              <div class="legend-scale"><div class="legend-bar"><span class="legend-swatch"></span><span class="legend-swatch"></span><span class="legend-swatch"></span><span class="legend-swatch"></span><span class="legend-swatch"></span><span class="legend-swatch"></span><span class="legend-swatch"></span><span class="legend-swatch"></span><span class="legend-swatch"></span><div id="legendMarker" class="legend-marker"></div></div><div class="legend-ticks"><span class="legend-tick" data-band="Extreme">Extreme</span><span class="legend-tick" data-band="Unusual">Unusual</span><span class="legend-tick" data-band="Exploring">Exploring</span><span class="legend-tick" data-band="Familiar">Familiar</span></div></div>
+            </aside>
+          </div>
+        </section>
+        <section class="explorer-module output-module" aria-labelledby="generatedOutputTitle">
+          <h3 id="generatedOutputTitle" class="module-title"><span>02</span>Generated output</h3>
+          <div id="sampleStage" class="sample-stage"><img id="exploreImage" alt="Digit at selected latent coordinate"></div>
+        </section>
+      </div>
+    </div></section>
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+  document.querySelectorAll('.tab').forEach(tab => tab.onclick=()=>{
+    document.querySelectorAll('.tab,.panel').forEach(x=>x.classList.remove('active'));
+    tab.classList.add('active'); $(tab.dataset.panel).classList.add('active');
+    if(tab.dataset.panel==='allPanel' && allSamplesAutomatic)requestAnimationFrame(fitAllDigitsToViewport);
+    if(tab.dataset.panel==='onePanel')requestAnimationFrame(()=>{
+      if(oneSamplesAutomatic)fitOneDigitToViewport();
+      else if(!$('oneImage').src)generateOne();
+      else updateOneGridAlignment();
+    });
+    if(tab.dataset.panel==='explorePanel')requestAnimationFrame(()=>{fitExplorerToViewport();$('pad').focus({preventScroll:true});if(!$('exploreImage').src)explore();});
+  });
+  const activeRequests=new WeakMap();
+  const statusFor=img=>$(img.id.replace('Image','Status'));
+  function setRequestStatus(img,message='',isError=false) {
+    const status=statusFor(img); status.textContent=message;
+    status.classList.toggle('visible',Boolean(message)); status.classList.toggle('error',isError);
+  }
+  async function loadImage(img, url) {
+    activeRequests.get(img)?.abort(); const controller=new AbortController(); activeRequests.set(img,controller);
+    img.classList.add('loading'); setRequestStatus(img,'Generating…');
+    try {
+      const response=await fetch(url,{signal:controller.signal});
+      if(!response.ok) {
+        const payload=await response.json().catch(()=>null);
+        const detail=Array.isArray(payload?.detail)?payload.detail.map(item=>item.msg).join('; '):payload?.detail;
+        throw new Error(detail||`Request failed: ${response.status}`);
+      }
+      const blob=await response.blob();
+      if(activeRequests.get(img)!==controller)return;
+      if (img.dataset.objectUrl) URL.revokeObjectURL(img.dataset.objectUrl);
+      img.dataset.objectUrl=URL.createObjectURL(blob); img.src=img.dataset.objectUrl;
+      img.onload=()=>{
+        if(activeRequests.get(img)!==controller)return;
+        img.classList.remove('loading');setRequestStatus(img);
+        if(img.id==='oneImage')updateOneGridAlignment();
+      };
+    } catch(error) {
+      if(error.name!=='AbortError' && activeRequests.get(img)===controller){
+        img.classList.remove('loading');setRequestStatus(img,`${error.message}. Restart the UI server if it predates these controls.`,true);console.error(error);
+      }
+    }
+  }
+  function debounce(callback, delay=250) {
+    let timer; const wrapped=()=>{clearTimeout(timer);timer=setTimeout(callback,delay)};
+    wrapped.flush=()=>{clearTimeout(timer);callback()}; return wrapped;
+  }
+  const generateAll=()=>{if($('allSeed').value!=='')loadImage($('allImage'),`/api/all?samples=${$('allSamples').value}&seed=${$('allSeed').value}`)};
+  const generateOne=()=>{if(/^[0-9]$/.test($('oneDigit').value) && $('oneSeed').value!=='')loadImage($('oneImage'),`/api/digit?digit=${$('oneDigit').value}&samples=${$('oneSamples').value}&seed=${$('oneSeed').value}&scale=${$('oneZoom').value}`)};
+  const scheduleAll=debounce(generateAll), scheduleOne=debounce(generateOne);
+  function bindSingleDigitInput(input,onValid) {
+    let lastValid=input.value;
+    const commit=raw=>{
+      const digit=String(raw??'').match(/[0-9]/)?.[0];
+      if(digit===undefined)return;
+      const changed=lastValid!==digit; input.value=digit; lastValid=digit;
+      if(changed)onValid();
+    };
+    input.addEventListener('keydown',event=>{
+      if(/^[0-9]$/.test(event.key)){event.preventDefault();commit(event.key);return;}
+      if(event.key==='Backspace'||event.key==='Delete'){event.preventDefault();return;}
+      if(event.ctrlKey||event.metaKey||['Tab','ArrowLeft','ArrowRight','Home','End','Enter'].includes(event.key))return;
+      event.preventDefault();
+    });
+    input.addEventListener('beforeinput',event=>{
+      if(event.inputType.startsWith('delete')){event.preventDefault();return;}
+      if(event.data!==null){event.preventDefault();commit(event.data);}
+    });
+    input.addEventListener('paste',event=>{
+      event.preventDefault();commit(event.clipboardData.getData('text'));
+    });
+    input.addEventListener('input',()=>{
+      const digit=input.value.match(/[0-9]/)?.[0];
+      if(digit===undefined){input.value=lastValid;return;}
+      commit(digit);
+    });
+  }
+  let allSamplesAutomatic=true, oneSamplesAutomatic=true;
+  function fitAllDigitsToViewport() {
+    const output=$('allPanel').querySelector('.output');
+    const width=output.clientWidth-16, height=output.clientHeight-16;
+    if(width<=0||height<=0)return;
+    // Backend grid geometry: 42px label gutter, 84px tiles, 8px gaps,
+    // and a 912px total height at the fixed 3x render scale.
+    const nativeWidthNeeded=width*912/height;
+    const fitted=Math.max(1,Math.min(100,Math.ceil((nativeWidthNeeded-34)/92)));
+    const changed=Number($('allSamples').value)!==fitted;
+    $('allSamples').value=fitted;$('allValue').textContent=fitted;
+    if(changed||!$('allImage').src)generateAll();
+  }
+  function fitOneDigitToViewport() {
+    const output=$('onePanel').querySelector('.output');
+    const outputStyle=getComputedStyle(output);
+    const width=output.clientWidth-parseFloat(outputStyle.paddingLeft)-parseFloat(outputStyle.paddingRight);
+    const height=output.clientHeight-parseFloat(outputStyle.paddingTop)-parseFloat(outputStyle.paddingBottom);
+    if(width<=0||height<=0)return;
+    const scale=Number($('oneZoom').value), columns=Math.max(1,Math.floor(48/scale));
+    const tile=28*scale, gap=2*scale;
+    const nativeWidth=columns*tile+(columns-1)*gap;
+    const imageStyle=getComputedStyle($('oneImage'));
+    const horizontalBorder=parseFloat(imageStyle.borderLeftWidth)+parseFloat(imageStyle.borderRightWidth);
+    const verticalBorder=parseFloat(imageStyle.borderTopWidth)+parseFloat(imageStyle.borderBottomWidth);
+    const nativeHeightCapacity=Math.max(1,height-verticalBorder)*nativeWidth/Math.max(1,width-horizontalBorder);
+    const rows=Math.max(1,Math.floor((nativeHeightCapacity+gap)/(tile+gap)));
+    const fitted=Math.max(1,Math.min(5000,rows*columns));
+    const changed=Number($('oneSamples').value)!==fitted;
+    $('oneSamples').value=fitted;$('oneValue').textContent=fitted;
+    if(changed||!$('oneImage').src)generateOne();
+  }
+  function updateOneGridAlignment() {
+    const output=$('onePanel').querySelector('.output'), image=$('oneImage');
+    output.classList.remove('one-grid-fits');
+    if(!$('onePanel').classList.contains('active')||!image.naturalHeight)return;
+    requestAnimationFrame(()=>{
+      const style=getComputedStyle(output);
+      const availableHeight=output.clientHeight-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom);
+      const fits=image.getBoundingClientRect().height<=availableHeight+.5;
+      output.classList.toggle('one-grid-fits',fits);
+      if(fits)output.scrollTop=0;
+    });
+  }
+  $('allSamples').oninput=()=>{allSamplesAutomatic=false;$('allValue').textContent=$('allSamples').value;scheduleAll()};
+  $('allSamples').onchange=scheduleAll.flush;
+  $('allSeed').oninput=scheduleAll;
+  $('oneSamples').oninput=()=>{oneSamplesAutomatic=false;$('oneValue').textContent=$('oneSamples').value;scheduleOne()};
+  $('oneSamples').onchange=scheduleOne.flush;
+  $('oneZoom').oninput=()=>{
+    $('oneZoomValue').textContent=`${Number($('oneZoom').value)*25}%`;
+    if(oneSamplesAutomatic)fitOneDigitToViewport();else scheduleOne();
+  };
+  $('oneZoom').onchange=()=>{if(oneSamplesAutomatic)fitOneDigitToViewport();else scheduleOne.flush()};
+  $('oneSeed').oninput=scheduleOne;
+  bindSingleDigitInput($('oneDigit'),scheduleOne);
+  function addShiftWheelStepping(slider) {
+    slider.addEventListener('wheel',event=>{
+      if(!event.shiftKey)return; event.preventDefault();
+      const delta=Math.abs(event.deltaY)>=Math.abs(event.deltaX)?event.deltaY:event.deltaX;
+      const next=Number(slider.value)+(delta<0?1:-1);
+      slider.value=Math.max(Number(slider.min),Math.min(Number(slider.max),next));
+      slider.dispatchEvent(new Event('input',{bubbles:true}));
+    },{passive:false});
+  }
+  ['allSamples','oneSamples'].forEach(id=>addShiftWheelStepping($(id)));
+  const refitAllDigits=debounce(()=>{if(allSamplesAutomatic&&$('allPanel').classList.contains('active'))fitAllDigitsToViewport()},150);
+  const refitOneDigit=debounce(()=>{if(!$('onePanel').classList.contains('active'))return;if(oneSamplesAutomatic)fitOneDigitToViewport();else updateOneGridAlignment()},150);
+  window.addEventListener('resize',refitAllDigits);
+  window.addEventListener('resize',refitOneDigit);
+  const pad=$('pad'), ctx=pad.getContext('2d'); let px=0, py=0, requestTimer;
+  const planeLimit=()=>Number($('areaLimit').value);
+  const clampToPlane=value=>Math.max(-planeLimit(),Math.min(planeLimit(),value));
+  const distanceBands=[
+    {name:'Familiar',max:.35,text:'#38674f'},
+    {name:'Exploring',max:.75,text:'#3f765b'},
+    {name:'Unusual',max:1.5,text:'#306f57'},
+    {name:'Extreme',max:Infinity,text:'#082a22'},
+  ];
+  const distancePalette=['#d8f3df','#b8e2ca','#96d1b2','#72bf99','#4eac7e','#41916c','#306f57','#1d4e3f','#082a22'];
+  const colorScaleMaxDistance=2.5;
+  const distanceBand=distance=>distanceBands.find(band=>distance<=band.max);
+  const formatPlaneTick=value=>Number(value.toFixed(2)).toString();
+  function distanceMarkerPosition(distance) {
+    if(distance<=.35)return 25*distance/.35;
+    if(distance<=.75)return 25+25*(distance-.35)/.4;
+    if(distance<=1.5)return 50+25*(distance-.75)/.75;
+    return 75+25*Math.min(1,(distance-1.5)/(colorScaleMaxDistance-1.5));
+  }
+  function distanceAtMarkerPosition(position) {
+    if(position<=25)return .35*position/25;
+    if(position<=50)return .35+.4*(position-25)/25;
+    if(position<=75)return .75+.75*(position-50)/25;
+    return 1.5+(colorScaleMaxDistance-1.5)*(position-75)/25;
+  }
+  function distanceColor(distance) {
+    const index=Math.min(distancePalette.length-1,Math.floor(distanceMarkerPosition(distance)*distancePalette.length/100));
+    return distancePalette[index];
+  }
+  function fitExplorerToViewport() {
+    if(!$('explorePanel').classList.contains('active'))return;
+    const planeContent=$('planeContent'), planeStack=planeContent.querySelector('.plane-stack');
+    const sampleStage=$('sampleStage'), distanceLegend=$('distanceLegend');
+    const coords=planeStack.querySelector('.coords'), contentStyle=getComputedStyle(planeContent);
+    const gap=parseFloat(contentStyle.columnGap||contentStyle.gap)||0;
+    const coordsStyle=getComputedStyle(coords), coordsHeight=coords.offsetHeight+parseFloat(coordsStyle.marginTop||0);
+    const planeSize=Math.floor(Math.min(planeContent.clientWidth-distanceLegend.offsetWidth-gap,planeContent.clientHeight-coordsHeight));
+    const sampleSize=Math.floor(Math.min(sampleStage.clientWidth,sampleStage.clientHeight));
+    if(planeSize>0){planeStack.style.flexBasis=`${planeSize}px`;planeStack.style.width=`${planeSize}px`;pad.style.width=`${planeSize}px`;pad.style.height=`${planeSize}px`;distanceLegend.style.height=`${planeSize}px`;}
+    if(sampleSize>0){$('exploreImage').style.width=`${sampleSize}px`;$('exploreImage').style.height=`${sampleSize}px`;}
+  }
+  function drawPad() {
+    const w=pad.width, limit=planeLimit(), maxDistance=Math.SQRT2*limit;
+    ctx.clearRect(0,0,w,w);ctx.fillStyle=distanceColor(maxDistance);ctx.fillRect(0,0,w,w);
+    for(let index=distancePalette.length-1;index>0;index--){
+      const radius=distanceAtMarkerPosition(100*index/distancePalette.length);
+      if(radius>=maxDistance)continue;ctx.fillStyle=distancePalette[index-1];ctx.beginPath();ctx.arc(w/2,w/2,radius*w/(2*limit),0,Math.PI*2);ctx.fill();
+    }
+    ctx.font='16px ui-monospace, monospace'; ctx.lineWidth=1;
+    for(let i=0;i<=8;i++){
+      const position=i*w/8; ctx.strokeStyle='#ffffff24';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(position,0);ctx.lineTo(position,w);ctx.stroke();ctx.beginPath();ctx.moveTo(0,position);ctx.lineTo(w,position);ctx.stroke();
+      if(i%2===0){
+        const xValue=-limit+2*limit*i/8, yValue=limit-2*limit*i/8;ctx.fillStyle='#f1f4fa';
+        ctx.textAlign=i===0?'left':i===8?'right':'center';ctx.fillText(formatPlaneTick(xValue),position,w-10);
+        if(i!==4&&i!==8){ctx.textAlign='left';ctx.fillText(formatPlaneTick(yValue),8,Math.max(18,Math.min(w-24,position-6)));}
+      }
+    }
+    ctx.strokeStyle='#061b17b8';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2,w);ctx.moveTo(0,w/2);ctx.lineTo(w,w/2);ctx.stroke();
+    ctx.strokeStyle='#f3fff6d9';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2,w);ctx.moveTo(0,w/2);ctx.lineTo(w,w/2);ctx.stroke();
+    ctx.fillStyle='white';ctx.font='bold 20px ui-monospace, monospace';ctx.textAlign='right';ctx.fillText('x',w-12,w/2-10);ctx.textAlign='left';ctx.fillText('y',w/2+10,22);
+    const markerX=(px/(2*limit)+.5)*w, markerY=(-py/(2*limit)+.5)*w;
+    const markerOnExtreme=distanceBand(Math.hypot(px,py)).name==='Extreme';
+    ctx.strokeStyle=markerOnExtreme?'#061b17':'#f3fff6';ctx.lineWidth=7;ctx.beginPath();ctx.arc(markerX,markerY,12,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle=markerOnExtreme?'#d8f3df':'#082a22';ctx.lineWidth=3;ctx.beginPath();ctx.arc(markerX,markerY,12,0,Math.PI*2);ctx.stroke();
+  }
+  function explore() { const distance=Math.hypot(px,py), band=distanceBand(distance);
+    $('coords').textContent=`x ${px.toFixed(2)} · y ${py.toFixed(2)} · bounds ±${planeLimit().toFixed(2)}`;
+    $('distanceState').textContent=band.name;$('distanceState').style.color=band.text;
+    $('legendMarker').style.bottom=`calc(${distanceMarkerPosition(distance)}% - 1px)`;
+    document.querySelectorAll('.legend-tick').forEach(tick=>tick.classList.toggle('active',tick.dataset.band===band.name));
+    drawPad(); clearTimeout(requestTimer);
+    if($('exploreSeed').value!=='')requestTimer=setTimeout(()=>loadImage($('exploreImage'),`/api/explore?digit=${$('exploreDigit').value}&x=${px}&y=${py}&seed=${$('exploreSeed').value}`),45); }
+  function point(event) { const r=pad.getBoundingClientRect(), span=2*planeLimit(); px=((event.clientX-r.left)/r.width-.5)*span; py=-((event.clientY-r.top)/r.height-.5)*span; px=clampToPlane(px);py=clampToPlane(py);explore(); }
+  pad.onpointerdown=e=>{pad.focus({preventScroll:true});pad.setPointerCapture(e.pointerId);point(e)}; pad.onpointermove=e=>{if(pad.hasPointerCapture(e.pointerId))point(e)};
+  pad.addEventListener('wheel',event=>{
+    if(!event.ctrlKey)return;
+    event.preventDefault();event.stopPropagation();
+    const slider=$('areaLimit'), delta=event.deltaY||event.deltaX;
+    if(!delta)return;
+    const step=Number(slider.step), direction=delta>0?1:-1;
+    const next=Math.max(Number(slider.min),Math.min(Number(slider.max),Number(slider.value)+direction*step));
+    slider.value=(Math.round(next*100)/100).toFixed(2);
+    slider.dispatchEvent(new Event('input',{bubbles:true}));
+  },{passive:false});
+  function nudge(event) {
+    const directions={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,1],ArrowDown:[0,-1],a:[-1,0],d:[1,0],w:[0,1],s:[0,-1]};
+    const key=event.key.length===1?event.key.toLowerCase():event.key;
+    if(!directions[key])return; event.preventDefault(); const [dx,dy]=directions[key];
+    const amount=Number($('nudgeAmount').value); px=clampToPlane(px+dx*amount);py=clampToPlane(py+dy*amount);explore();
+  }
+  pad.onkeydown=nudge;
+  document.addEventListener('keydown',event=>{
+    if($('onePanel').classList.contains('active') && /^[0-9]$/.test(event.key) && !event.target.matches('input,select')){
+      $('oneDigit').value=event.key;$('oneDigit').dispatchEvent(new Event('input',{bubbles:true}));
+    }
+    if($('explorePanel').classList.contains('active') && /^[0-9]$/.test(event.key) && !event.target.matches('input,select')){
+      $('exploreDigit').value=event.key;$('exploreDigit').dispatchEvent(new Event('input',{bubbles:true}));
+    }
+    if($('explorePanel').classList.contains('active') && event.target===document.body)nudge(event);
+  });
+  bindSingleDigitInput($('exploreDigit'),explore); $('exploreSeed').oninput=debounce(explore);
+  $('areaLimit').oninput=()=>{$('areaValue').textContent=planeLimit().toFixed(2);px=clampToPlane(px);py=clampToPlane(py);explore()};
+  $('nudgeAmount').oninput=()=>{$('nudgeValue').textContent=Number($('nudgeAmount').value).toFixed(2)};
+  $('newPlane').onclick=()=>{px=py=0;pad.focus({preventScroll:true});explore()};
+  const refitExplorer=debounce(fitExplorerToViewport,50);
+  window.addEventListener('resize',refitExplorer);
+  if('ResizeObserver' in window)new ResizeObserver(refitExplorer).observe($('exploreLayout'));
+  drawPad(); requestAnimationFrame(()=>requestAnimationFrame(fitAllDigitsToViewport));
+</script></body></html>
