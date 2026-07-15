@@ -7,6 +7,13 @@ async function waitForGeneratedImage(page, selector) {
   return image;
 }
 
+async function elementGeometry(locator) {
+  return locator.evaluate(element => {
+    const {x, y, width, height} = element.getBoundingClientRect();
+    return {x, y, width, height};
+  });
+}
+
 test('all three modes generate locally without API network traffic', async ({page}, testInfo) => {
   const apiRequests = [];
   const consoleErrors = [];
@@ -30,7 +37,13 @@ test('all three modes generate locally without API network traffic', async ({pag
   await expect.poll(() => allImage.evaluate(element => element.naturalHeight)).toBeGreaterThan(800);
   await page.screenshot({path: testInfo.outputPath('all-digits.png'), fullPage: true});
 
-  await page.locator('[data-panel="onePanel"]').click();
+  const allTab = page.locator('[data-panel="allPanel"]');
+  const oneTab = page.locator('[data-panel="onePanel"]');
+  const allTabBefore = await elementGeometry(allTab);
+  const oneTabBefore = await elementGeometry(oneTab);
+  await oneTab.click();
+  expect(await elementGeometry(allTab)).toEqual(allTabBefore);
+  expect(await elementGeometry(oneTab)).toEqual(oneTabBefore);
   await page.locator('#oneSamples').evaluate(element => {
     element.value = '60';
     element.dispatchEvent(new Event('input', {bubbles: true}));

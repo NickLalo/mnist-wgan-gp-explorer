@@ -21,7 +21,7 @@
     .tab { border:2px solid var(--ink); border-radius:3px 3px 0 0; padding:7px 13px; color:var(--ink); background:var(--paper-dark); box-shadow:2px 2px 0 var(--ink);
       cursor:pointer; font:800 12px/1.15 ui-monospace,SFMono-Regular,Menlo,monospace; text-transform:uppercase; letter-spacing:.02em; }
     .tab:hover { background:var(--paper-light); }
-    .tab.active { background:var(--mint); box-shadow:none; transform:translate(2px,2px); }
+    .tab.active { background:var(--mint); box-shadow:2px 2px 0 var(--ink),inset 0 -3px 0 #4eac7e; }
     .panel { display:none; margin:0 5px 5px 0; overflow:hidden; background:var(--paper-light); border:2px solid var(--ink); border-radius:4px; box-shadow:4px 4px 0 var(--ink); }
     .panel.active { flex:1 1 0; min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr); grid-template-columns:minmax(0,1fr); }
     .controls { position:relative; z-index:5; min-width:0; display:grid; align-items:center; gap:11px; padding:9px 12px 10px; border-bottom:2px solid var(--ink); background:var(--paper-dark); }
