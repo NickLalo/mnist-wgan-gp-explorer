@@ -10,7 +10,7 @@
   <img src="docs/assets/all-digits.png" width="49%" alt="All-digits view showing generated samples for every MNIST class">
   <img src="docs/assets/one-digit.png" width="49%" alt="One-digit view showing many generated variations of a selected MNIST class">
   <br>
-  <em>Compare all ten classes, then zoom out to audit a large family of one requested digit.</em>
+  <em>Compare all ten classes, then zoom out to inspect many variations of a selected digit.</em>
 </p>
 
 <br>
@@ -18,7 +18,7 @@
 <p align="center">
   <img src="docs/assets/latent-explorer.gif" width="900" alt="Animated latent explorer moving through generated variations of a selected digit">
   <br>
-  <em>Hold the digit class fixed while moving continuously through a two-dimensional slice of latent space, deliberately moving beyond the typical training-input region to see where recognizable digit generation breaks down.</em>
+  <em>Hold the digit class fixed while moving through a two-dimensional slice of latent space, including regions beyond those typically seen during training, to see where the generated digits begin to break down.</em>
 </p>
 
 ## Features
@@ -30,13 +30,15 @@
   exponential-moving-average (EMA) inference weights.
 - **Distribution-aware training:** unpaired feature, diversity, image-statistic, and stroke-integrity
   objectives tuned for MNIST.
-- **Tail-aware evaluation:** write both a representative grid and the weakest class-conditioned
-  manifold samples for visual review.
+- **Tail-aware evaluation:** save a representative grid alongside the samples farthest from each
+  digit's real-data manifold.
 - **Selective grid cleanup:** keep ordinary samples untouched while replacing only clear class
   mistakes, severe quality outliers, and detached ink artifacts from a small backup pool.
 - **Ready-to-explore checkpoint:** launch the interface immediately with the bundled best model.
 
 ## Quick start
+
+Run the UI with the bundled checkpoint:
 
 ```bash
 ./run.sh
@@ -195,8 +197,8 @@ construction and [`index.html`](src/mnist_wgan/static/index.html) for interactio
 
 ## Evaluation results
 
-The retained seed-112 report evaluates 8,000 unfiltered EMA-generated images, with 800 samples for
-each digit.
+The seed-112 evaluation report contains results for 8,000 unfiltered images generated with EMA
+weights—800 for each digit.
 
 | Metric | Result | Better | Interpretation |
 |---|---:|:---:|---|
@@ -259,7 +261,7 @@ real data rather than being forced to reconstruct individual training images.
 
 ## Reusing parts of the project
 
-The implementation is intentionally small and flat. Its main pieces can be studied independently:
+The codebase is compact, and its main components are separated by responsibility:
 
 | Component | Source | Contract and scope |
 |---|---|---|
@@ -302,7 +304,7 @@ data/                 Downloaded MNIST files (Git-ignored)
 
 ## Reproducing the reported result
 
-The metrics above were produced by the model state now included in the repository:
+The metrics above were produced by the model state included in the repository:
 
 - checkpoint: `checkpoints/mnist-wgan-gp-inference.ckpt` (epoch 29, global step 12,412);
 - checkpoint size: 12,001,253 bytes;
@@ -315,7 +317,7 @@ The metrics above were produced by the model state now included in the repositor
 - evaluation classifier test accuracy recorded in the report: 99.47%;
 - saved report: `artifacts/best_run/evaluation_seed112.json` (local and Git-ignored).
 
-Run the recorded evaluation again with:
+Reproduce the reported evaluation with:
 
 ```bash
 uv run mnist-wgan-evaluate \
