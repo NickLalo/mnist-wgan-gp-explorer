@@ -10,6 +10,10 @@ async function waitForGeneratedImage(page, selector) {
 test('all three modes generate locally without API network traffic', async ({page}, testInfo) => {
   const apiRequests = [];
   const consoleErrors = [];
+  await page.route('**/models/*.onnx', async route => {
+    await new Promise(resolve => setTimeout(resolve, 600));
+    await route.continue();
+  });
   page.on('request', request => {
     if (new URL(request.url()).pathname.includes('/api/')) apiRequests.push(request.url());
   });
@@ -18,7 +22,11 @@ test('all three modes generate locally without API network traffic', async ({pag
   });
 
   await page.goto('/');
+  await expect(page.locator('#allStatus')).toBeVisible();
+  await expect(page.locator('#allStatus')).toHaveClass(/generating/);
+  await expect(page.locator('#allStatus')).toContainText('Generating Numbers');
   const allImage = await waitForGeneratedImage(page, '#allImage');
+  await expect(page.locator('#allStatus')).not.toBeVisible();
   await expect.poll(() => allImage.evaluate(element => element.naturalHeight)).toBeGreaterThan(800);
   await page.screenshot({path: testInfo.outputPath('all-digits.png'), fullPage: true});
 
