@@ -165,6 +165,8 @@
       input[type=range]::-moz-range-thumb { width:18px; height:18px; }
       .slider-tooltip::after { display:none; }
       #allPanel .output,#onePanel .output { padding:7px; }
+      #allPanel .output.all-grid-fits { display:grid; place-items:center; overflow:hidden; }
+      #allPanel .output.all-grid-fits #allImage { width:auto; height:auto; max-width:100%; max-height:100%; margin:auto; }
       #explorePanel .output { display:block; padding:8px; overflow:visible; }
       .explore-layout { height:auto; grid-template-columns:minmax(0,1fr); gap:13px; overflow:visible; }
       .explorer-module { min-height:0; padding:8px; }
@@ -215,7 +217,7 @@
     <div class="output"><div id="oneStatus" class="request-status" role="status" aria-live="polite"></div><img id="oneImage" alt="Samples of one generated MNIST digit"></div></section>
 
   <section id="explorePanel" class="panel"><div class="controls">
-    <div class="control-intro explore-guide"><div class="explorer-heading"><span class="experiment-tag">Experimental</span><h2>How to explore</h2></div><p class="experiment-copy">Type 0–9. Drag or use arrow keys/WASD. Ctrl+scroll changes bounds; distance from center makes inputs more unusual.</p></div>
+    <div class="control-intro explore-guide"><div class="explorer-heading"><span class="experiment-tag">Experimental</span><h2>How to explore</h2></div><p class="experiment-copy">Type 0–9. Drag or use arrow keys/WASD. Two-finger pinch or Ctrl+scroll changes bounds; distance from center makes inputs more unusual.</p></div>
     <div class="control-field compact"><label for="exploreDigit">Digit</label><input id="exploreDigit" class="digit-input" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" autocomplete="off" value="3"></div>
     <div class="control-field compact"><label for="exploreSeed">Plane seed</label><input id="exploreSeed" type="number" min="0" value="112"></div>
     <div class="control-field"><label for="areaLimit">Plane limit · ±<span id="areaValue">1.50</span></label>
@@ -230,7 +232,7 @@
           <h3 id="latentPlaneTitle" class="module-title"><span>01</span>Latent plane</h3>
           <div id="planeContent" class="plane-content">
             <div class="plane-stack">
-              <div id="planeStage" class="plane-stage"><canvas id="pad" width="560" height="560" tabindex="0" aria-label="Labeled x and y latent plane; drag or use arrow keys or WASD to navigate, or hold Control and scroll to change the bounds"></canvas></div>
+              <div id="planeStage" class="plane-stage"><canvas id="pad" width="560" height="560" tabindex="0" aria-label="Labeled x and y latent plane; drag or use arrow keys or WASD to navigate, pinch with two fingers, or hold Control and scroll to change the bounds"></canvas></div>
               <div class="coords"><span id="coords">x 0.00 · y 0.00</span><span id="distanceState">Familiar</span></div>
             </div>
             <aside id="distanceLegend" class="distance-legend" aria-label="Latent input distance: familiar, exploring, unusual, and extreme">
@@ -292,7 +294,8 @@
       };
     } catch(error) {
       if(error.name!=='AbortError' && activeRequests.get(img)===controller){
-        img.classList.remove('loading');setRequestStatus(img,`${error.message}. Restart the UI server if it predates these controls.`,true);console.error(error);
+        const message=String(error.message||'Generation failed').replace(/\.$/,'');
+        img.classList.remove('loading');setRequestStatus(img,`${message}. Try again; reload the page if local inference does not recover.`,true);console.error(error);
       }
     }
   }
@@ -333,6 +336,7 @@
   let allSamplesAutomatic=true, oneSamplesAutomatic=true;
   function fitAllDigitsToViewport() {
     const output=$('allPanel').querySelector('.output');
+    output.classList.add('all-grid-fits');
     const width=output.clientWidth-16, height=output.clientHeight-16;
     if(width<=0||height<=0)return;
     // Backend grid geometry: 42px label gutter, 84px tiles, 8px gaps,
@@ -374,7 +378,7 @@
       if(fits)output.scrollTop=0;
     });
   }
-  $('allSamples').oninput=()=>{allSamplesAutomatic=false;$('allValue').textContent=$('allSamples').value;scheduleAll()};
+  $('allSamples').oninput=()=>{allSamplesAutomatic=false;$('allPanel').querySelector('.output').classList.remove('all-grid-fits');$('allValue').textContent=$('allSamples').value;scheduleAll()};
   $('allSamples').onchange=scheduleAll.flush;
   $('allSeed').oninput=scheduleAll;
   $('oneSamples').oninput=()=>{oneSamplesAutomatic=false;$('oneValue').textContent=$('oneSamples').value;scheduleOne()};
@@ -470,24 +474,51 @@
     ctx.strokeStyle=markerOnExtreme?'#061b17':'#f3fff6';ctx.lineWidth=7;ctx.beginPath();ctx.arc(markerX,markerY,12,0,Math.PI*2);ctx.stroke();
     ctx.strokeStyle=markerOnExtreme?'#d8f3df':'#082a22';ctx.lineWidth=3;ctx.beginPath();ctx.arc(markerX,markerY,12,0,Math.PI*2);ctx.stroke();
   }
-  function explore() { const distance=Math.hypot(px,py), band=distanceBand(distance);
+  function explore(generateImage=true) { const distance=Math.hypot(px,py), band=distanceBand(distance);
     $('coords').textContent=`x ${px.toFixed(2)} · y ${py.toFixed(2)} · bounds ±${planeLimit().toFixed(2)}`;
     $('distanceState').textContent=band.name;$('distanceState').style.color=band.text;
     $('legendMarker').style.bottom=`calc(${distanceMarkerPosition(distance)}% - 1px)`;
     document.querySelectorAll('.legend-tick').forEach(tick=>tick.classList.toggle('active',tick.dataset.band===band.name));
-    drawPad(); clearTimeout(requestTimer);
+    drawPad(); if(!generateImage)return; clearTimeout(requestTimer);
     if($('exploreSeed').value!=='')requestTimer=setTimeout(()=>loadImage($('exploreImage'),`/api/explore?digit=${$('exploreDigit').value}&x=${px}&y=${py}&seed=${$('exploreSeed').value}`),45); }
-  function point(event) { const r=pad.getBoundingClientRect(), span=2*planeLimit(); px=((event.clientX-r.left)/r.width-.5)*span; py=-((event.clientY-r.top)/r.height-.5)*span; px=clampToPlane(px);py=clampToPlane(py);explore(); }
-  pad.onpointerdown=e=>{pad.focus({preventScroll:true});pad.setPointerCapture(e.pointerId);point(e)}; pad.onpointermove=e=>{if(pad.hasPointerCapture(e.pointerId))point(e)};
+  function point(event) { const r=pad.getBoundingClientRect(), span=2*planeLimit(), clientX=event.clientX??event.x, clientY=event.clientY??event.y; px=((clientX-r.left)/r.width-.5)*span; py=-((clientY-r.top)/r.height-.5)*span; px=clampToPlane(px);py=clampToPlane(py);explore(); }
+  function setPlaneLimit(value) {
+    const slider=$('areaLimit'), minimum=Number(slider.min), maximum=Number(slider.max), step=Number(slider.step);
+    const stepped=minimum+Math.round((value-minimum)/step)*step;
+    const next=Math.max(minimum,Math.min(maximum,stepped)).toFixed(2);
+    if(slider.value===next)return;
+    slider.value=next;slider.dispatchEvent(new Event('input',{bubbles:true}));
+  }
+  const padPointers=new Map();let pinchStartDistance=0,pinchStartLimit=planeLimit(),touchPointTimer;
+  const pinchDistance=()=>{const [first,second]=[...padPointers.values()];return first&&second?Math.hypot(second.x-first.x,second.y-first.y):0};
+  pad.onpointerdown=event=>{
+    pad.focus({preventScroll:true});pad.setPointerCapture(event.pointerId);padPointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
+    if(padPointers.size===1){
+      if(event.pointerType==='touch')touchPointTimer=setTimeout(()=>{if(padPointers.size===1)point(event)},60);
+      else point(event);
+    } else if(padPointers.size===2){clearTimeout(touchPointTimer);pinchStartDistance=pinchDistance();pinchStartLimit=planeLimit();}
+  };
+  pad.onpointermove=event=>{
+    if(!padPointers.has(event.pointerId))return;
+    padPointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
+    clearTimeout(touchPointTimer);
+    if(padPointers.size>=2){const distance=pinchDistance();if(distance>0&&pinchStartDistance>0)setPlaneLimit(pinchStartLimit*pinchStartDistance/distance);}
+    else point(event);
+  };
+  const endPadPointer=event=>{
+    const location=padPointers.get(event.pointerId),wasSingle=padPointers.size===1;
+    if(wasSingle&&touchPointTimer&&location){clearTimeout(touchPointTimer);point(location);}
+    else clearTimeout(touchPointTimer);
+    touchPointTimer=undefined;padPointers.delete(event.pointerId);if(padPointers.size<2)pinchStartDistance=0;
+  };
+  pad.onpointerup=endPadPointer;pad.onpointercancel=endPadPointer;
   pad.addEventListener('wheel',event=>{
     if(!event.ctrlKey)return;
     event.preventDefault();event.stopPropagation();
     const slider=$('areaLimit'), delta=event.deltaY||event.deltaX;
     if(!delta)return;
     const step=Number(slider.step), direction=delta>0?1:-1;
-    const next=Math.max(Number(slider.min),Math.min(Number(slider.max),Number(slider.value)+direction*step));
-    slider.value=(Math.round(next*100)/100).toFixed(2);
-    slider.dispatchEvent(new Event('input',{bubbles:true}));
+    setPlaneLimit(Number(slider.value)+direction*step);
   },{passive:false});
   function nudge(event) {
     const directions={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,1],ArrowDown:[0,-1],a:[-1,0],d:[1,0],w:[0,1],s:[0,-1]};
@@ -506,7 +537,7 @@
     if($('explorePanel').classList.contains('active') && event.target===document.body)nudge(event);
   });
   bindSingleDigitInput($('exploreDigit'),explore); $('exploreSeed').oninput=debounce(explore);
-  $('areaLimit').oninput=()=>{$('areaValue').textContent=planeLimit().toFixed(2);px=clampToPlane(px);py=clampToPlane(py);explore()};
+  $('areaLimit').oninput=()=>{const previousX=px,previousY=py;$('areaValue').textContent=planeLimit().toFixed(2);px=clampToPlane(px);py=clampToPlane(py);explore(px!==previousX||py!==previousY)};
   $('nudgeAmount').oninput=()=>{$('nudgeValue').textContent=Number($('nudgeAmount').value).toFixed(2)};
   $('newPlane').onclick=()=>{px=py=0;pad.focus({preventScroll:true});explore()};
   const refitExplorer=debounce(fitExplorerToViewport,50);

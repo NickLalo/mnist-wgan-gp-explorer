@@ -3,6 +3,7 @@ import * as ort from 'onnxruntime-web/webgpu';
 import {selectQualityIndices, candidateCount} from './quality.js';
 import {gaussianNoise, latentPlane} from './random.js';
 import {renderAllDigits, renderOneDigit, renderSingleImage} from './render.js';
+import {createSerialExecutor} from './serial.js';
 
 const assetPath = path => `${import.meta.env.BASE_URL}${path}`;
 ort.env.logLevel = 'error';
@@ -11,6 +12,7 @@ ort.env.wasm.numThreads = 1;
 let manifestPromise;
 let generatorPromise;
 let scorerPromise;
+const runSerially = createSerialExecutor();
 
 async function manifest() {
   manifestPromise ??= window.__networkFetch(assetPath('models/manifest.json')).then(response => {
@@ -183,16 +185,18 @@ function errorResponse(error) {
 
 export async function handleApiRequest(input, init = {}) {
   const signal = init.signal ?? (input instanceof Request ? input.signal : undefined);
-  try {
-    throwIfAborted(signal);
-    const url = new URL(input instanceof Request ? input.url : input, window.location.href);
-    if (url.pathname.endsWith('/api/all')) return await allDigits(url.searchParams, signal);
-    if (url.pathname.endsWith('/api/digit')) return await oneDigit(url.searchParams, signal);
-    if (url.pathname.endsWith('/api/explore')) return await explore(url.searchParams, signal);
-    return new Response(JSON.stringify({detail: 'Unknown local endpoint'}), {status: 404});
-  } catch (error) {
-    if (error.name === 'AbortError') throw error;
-    console.error(error);
-    return errorResponse(error);
-  }
+  return runSerially(async () => {
+    try {
+      throwIfAborted(signal);
+      const url = new URL(input instanceof Request ? input.url : input, window.location.href);
+      if (url.pathname.endsWith('/api/all')) return await allDigits(url.searchParams, signal);
+      if (url.pathname.endsWith('/api/digit')) return await oneDigit(url.searchParams, signal);
+      if (url.pathname.endsWith('/api/explore')) return await explore(url.searchParams, signal);
+      return new Response(JSON.stringify({detail: 'Unknown local endpoint'}), {status: 404});
+    } catch (error) {
+      if (error.name === 'AbortError') throw error;
+      console.error(error);
+      return errorResponse(error);
+    }
+  }, signal);
 }

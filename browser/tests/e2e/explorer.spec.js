@@ -77,6 +77,12 @@ test.describe('phone layout', () => {
     await page.goto('/');
     await waitForGeneratedImage(page, '#allImage');
     expect(await fitsViewport('#allPanel .controls')).toBe(true);
+    await expect(page.locator('#allPanel .output')).toHaveClass(/all-grid-fits/);
+    const allOutput = await elementGeometry(page.locator('#allPanel .output'));
+    const allImage = await elementGeometry(page.locator('#allImage'));
+    expect(allImage.x).toBeGreaterThanOrEqual(allOutput.x);
+    expect(allImage.x + allImage.width).toBeLessThanOrEqual(allOutput.x + allOutput.width);
+    await expect.poll(() => page.locator('#allPanel .output').evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(0);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
     await page.locator('[data-panel="onePanel"]').click();
@@ -96,6 +102,30 @@ test.describe('phone layout', () => {
     expect(pad.width).toBeGreaterThan(240);
     expect(sample.width).toBeGreaterThan(300);
     await expect(page.locator('#newPlane')).toHaveCSS('min-height', '42px');
+
+    const initialSampleSource = await page.locator('#exploreImage').getAttribute('src');
+    const client = await page.context().newCDPSession(page);
+    const centerX = pad.x + pad.width / 2;
+    const centerY = pad.y + pad.height / 2;
+    await client.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [
+      {x: centerX + 40, y: centerY, id: 1, radiusX: 4, radiusY: 4, force: 1},
+    ]});
+    await client.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []});
+    await expect(page.locator('#coords')).not.toContainText('x 0.00');
+    await expect.poll(() => page.locator('#exploreImage').getAttribute('src')).not.toBe(initialSampleSource);
+    const sampleSource = await page.locator('#exploreImage').getAttribute('src');
+    await client.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [
+      {x: centerX - 40, y: centerY, id: 1, radiusX: 4, radiusY: 4, force: 1},
+      {x: centerX + 40, y: centerY, id: 2, radiusX: 4, radiusY: 4, force: 1},
+    ]});
+    await client.send('Input.dispatchTouchEvent', {type: 'touchMove', touchPoints: [
+      {x: centerX - 70, y: centerY, id: 1, radiusX: 4, radiusY: 4, force: 1},
+      {x: centerX + 70, y: centerY, id: 2, radiusX: 4, radiusY: 4, force: 1},
+    ]});
+    await client.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []});
+    await expect.poll(async () => Number(await page.locator('#areaLimit').inputValue())).toBeLessThan(1.5);
+    await expect(page.locator('#coords')).not.toContainText('bounds ±1.50');
+    await expect(page.locator('#exploreImage')).toHaveAttribute('src', sampleSource);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 });
