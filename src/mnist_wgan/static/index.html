@@ -57,7 +57,9 @@
       box-shadow:3px 3px 0 var(--ink); cursor:pointer; font:850 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace; text-transform:uppercase; white-space:nowrap; }
     button.action:hover { transform:translate(1px,1px); box-shadow:2px 2px 0 var(--ink); }
     .output { position:relative; min-width:0; min-height:0; display:grid; place-items:center; padding:9px; overflow:auto; background:var(--paper-dark); }
+    .output,.output img,.plane-stage,.sample-stage { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
     .output img { max-width:100%; max-height:700px; border:2px solid var(--ink); border-radius:0; background:#e8e5da; box-shadow:3px 3px 0 var(--ink); image-rendering:pixelated; }
+    .output img,.sample-stage img { -webkit-user-drag:none; }
     .output img:not([src]) { visibility:hidden; }
     #allPanel .output { display:block; overflow:auto; scrollbar-gutter:stable both-edges; }
     #allImage { display:block; width:auto; height:100%; max-width:none; max-height:100%; margin:0; }
@@ -203,7 +205,7 @@
       <div class="slider-tooltip" data-tooltip="Hover over the slider, hold Shift, and scroll to adjust by 1."><input id="allSamples" type="range" min="1" max="100" value="20"></div></div>
     <div class="control-field compact"><label for="allSeed">Seed</label><input id="allSeed" type="number" min="0" value="112"></div>
     <div class="control-hint">Hover over the slider, hold Shift, and scroll to adjust by 1</div></div>
-    <div class="output"><div id="allStatus" class="request-status visible generating" role="status" aria-live="polite" aria-label="Generating numbers"><span>Generating Numbers</span><span class="loading-dots" aria-hidden="true"></span></div><img id="allImage" alt="Ten rows of generated MNIST digits"></div></section>
+    <div class="output"><div id="allStatus" class="request-status visible generating" role="status" aria-live="polite" aria-label="Generating numbers"><span>Generating Numbers</span><span class="loading-dots" aria-hidden="true"></span></div><img id="allImage" draggable="false" alt="Ten rows of generated MNIST digits"></div></section>
 
   <section id="onePanel" class="panel"><div class="controls">
     <div class="control-intro"><h2>Single-class study</h2><p>Type or press 0–9</p></div>
@@ -214,7 +216,7 @@
       <input id="oneZoom" type="range" min="1" max="4" step="1" value="2"></div>
     <div class="control-field compact"><label for="oneSeed">Seed</label><input id="oneSeed" type="number" min="0" value="112"></div>
     <div class="control-hint">Up to 5,000 samples</div></div>
-    <div class="output"><div id="oneStatus" class="request-status" role="status" aria-live="polite"></div><img id="oneImage" alt="Samples of one generated MNIST digit"></div></section>
+    <div class="output"><div id="oneStatus" class="request-status" role="status" aria-live="polite"></div><img id="oneImage" draggable="false" alt="Samples of one generated MNIST digit"></div></section>
 
   <section id="explorePanel" class="panel"><div class="controls">
     <div class="control-intro explore-guide"><div class="explorer-heading"><span class="experiment-tag">Experimental</span><h2>How to explore</h2></div><p class="experiment-copy">Type 0–9. Drag or use arrow keys/WASD. Two-finger pinch or Ctrl+scroll changes bounds; distance from center makes inputs more unusual.</p></div>
@@ -242,7 +244,7 @@
         </section>
         <section class="explorer-module output-module" aria-labelledby="generatedOutputTitle">
           <h3 id="generatedOutputTitle" class="module-title"><span>02</span>Generated output</h3>
-          <div id="sampleStage" class="sample-stage"><img id="exploreImage" alt="Digit at selected latent coordinate"></div>
+          <div id="sampleStage" class="sample-stage"><img id="exploreImage" draggable="false" alt="Digit at selected latent coordinate"></div>
         </section>
       </div>
     </div></section>

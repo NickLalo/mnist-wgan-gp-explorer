@@ -76,6 +76,8 @@ test.describe('phone layout', () => {
 
     await page.goto('/');
     await waitForGeneratedImage(page, '#allImage');
+    await expect(page.locator('#allImage')).toHaveAttribute('draggable', 'false');
+    await expect(page.locator('#allImage')).toHaveCSS('user-select', 'none');
     expect(await fitsViewport('#allPanel .controls')).toBe(true);
     await expect(page.locator('#allPanel .output')).toHaveClass(/all-grid-fits/);
     const allOutput = await elementGeometry(page.locator('#allPanel .output'));
@@ -87,10 +89,14 @@ test.describe('phone layout', () => {
 
     await page.locator('[data-panel="onePanel"]').click();
     await waitForGeneratedImage(page, '#oneImage');
+    await expect(page.locator('#oneImage')).toHaveAttribute('draggable', 'false');
+    await expect(page.locator('#oneImage')).toHaveCSS('user-select', 'none');
     expect(await fitsViewport('#onePanel .controls')).toBe(true);
 
     await page.locator('[data-panel="explorePanel"]').click();
     await waitForGeneratedImage(page, '#exploreImage');
+    await expect(page.locator('#exploreImage')).toHaveAttribute('draggable', 'false');
+    await expect(page.locator('#exploreImage')).toHaveCSS('user-select', 'none');
     expect(await fitsViewport('#explorePanel .controls')).toBe(true);
     expect(await fitsViewport('#exploreLayout')).toBe(true);
 
