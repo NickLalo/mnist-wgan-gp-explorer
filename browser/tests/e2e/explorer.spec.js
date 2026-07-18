@@ -18,7 +18,8 @@ test('all three modes generate locally without API network traffic', async ({pag
   const apiRequests = [];
   const consoleErrors = [];
   await page.route('**/models/*.onnx', async route => {
-    await new Promise(resolve => setTimeout(resolve, 600));
+    const delay = route.request().url().endsWith('/generator.onnx') ? 3200 : 600;
+    await new Promise(resolve => setTimeout(resolve, delay));
     await route.continue();
   });
   page.on('request', request => {
@@ -33,8 +34,14 @@ test('all three modes generate locally without API network traffic', async ({pag
   await expect(page.locator('#allStatus')).toBeVisible();
   await expect(page.locator('#allStatus')).toHaveClass(/generating/);
   await expect(page.locator('#allStatus')).toContainText('Generating Numbers');
+  await expect(page.locator('#allStatus .slow-generation-note')).toHaveCount(0);
+  await expect(page.locator('#allStatus .slow-generation-note')).toHaveText(
+    "Hmm, that's weird. It loaded faster on my machine",
+    {timeout: 6000},
+  );
   const allImage = await waitForGeneratedImage(page, '#allImage');
   await expect(page.locator('#allStatus')).not.toBeVisible();
+  await expect(page.locator('#allStatus .slow-generation-note')).toHaveCount(0);
   await expect.poll(() => allImage.evaluate(element => element.naturalHeight)).toBeGreaterThan(800);
   await page.screenshot({path: testInfo.outputPath('all-digits.png'), fullPage: true});
 
@@ -63,6 +70,16 @@ test('all three modes generate locally without API network traffic', async ({pag
 
   expect(apiRequests).toEqual([]);
   expect(consoleErrors).toEqual([]);
+});
+
+test('reports a local inference module startup failure', async ({page}) => {
+  await page.route('**/assets/index-*.js', route => route.abort());
+
+  await page.goto('/');
+
+  await expect(page.locator('#allStatus')).toHaveClass(/error/);
+  await expect(page.locator('#allStatus')).toContainText('Could not start local inference');
+  await expect(page.locator('#allStatus')).not.toHaveClass(/generating/);
 });
 
 test.describe('phone layout', () => {

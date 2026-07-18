@@ -1,13 +1,18 @@
-import * as ort from 'onnxruntime-web/webgpu';
-
 import {selectQualityIndices, candidateCount} from './quality.js';
 import {gaussianNoise, latentPlane} from './random.js';
 import {renderAllDigits, renderOneDigit, renderSingleImage} from './render.js';
 import {createSerialExecutor} from './serial.js';
 
 const assetPath = path => `${import.meta.env.BASE_URL}${path}`;
-ort.env.logLevel = 'error';
-ort.env.wasm.numThreads = 1;
+const isFirefox = navigator.userAgent.includes('Firefox/');
+const useWebGpu = Boolean(navigator.gpu) && !isFirefox;
+const runtimePromise = (
+  useWebGpu ? import('onnxruntime-web/webgpu') : import('onnxruntime-web/wasm')
+).then(runtime => {
+  runtime.env.logLevel = 'error';
+  runtime.env.wasm.numThreads = 1;
+  return runtime;
+});
 
 let manifestPromise;
 let generatorPromise;
@@ -23,14 +28,15 @@ async function manifest() {
 }
 
 async function createSession(modelPath) {
-  const providers = navigator.gpu ? ['webgpu', 'wasm'] : ['wasm'];
+  const ort = await runtimePromise;
+  const providers = useWebGpu ? ['webgpu', 'wasm'] : ['wasm'];
   try {
     return await ort.InferenceSession.create(assetPath(`models/${modelPath}`), {
       executionProviders: providers,
       graphOptimizationLevel: 'all',
     });
   } catch (error) {
-    if (!navigator.gpu) throw error;
+    if (providers.length === 1) throw error;
     console.warn('WebGPU initialization failed; using WebAssembly instead.', error);
     return ort.InferenceSession.create(assetPath(`models/${modelPath}`), {
       executionProviders: ['wasm'],
@@ -64,6 +70,7 @@ function oneHot(labels, start, stop) {
 }
 
 async function generate(noise, labels, latentDimension, signal) {
+  const ort = await runtimePromise;
   const session = await generatorSession();
   const images = new Float32Array(labels.length * 28 * 28);
   const batchSize = 256;
@@ -81,6 +88,7 @@ async function generate(noise, labels, latentDimension, signal) {
 }
 
 async function score(images, labels, signal) {
+  const ort = await runtimePromise;
   const session = await scorerSession();
   const outputs = {
     criticScores: new Float32Array(labels.length),
@@ -109,10 +117,15 @@ async function score(images, labels, signal) {
 
 async function qualityGenerate(classes, requestedPerClass, seed, signal) {
   const settings = await manifest();
-  const perClass = candidateCount(requestedPerClass, settings.sampling.quality_oversample);
+  // ONNX Runtime does not support its WebGPU provider in Firefox, where the
+  // optional WASM quality pass is much slower than generation itself.
+  const perClass = isFirefox
+    ? requestedPerClass
+    : candidateCount(requestedPerClass, settings.sampling.quality_oversample);
   const labels = classes.flatMap(digit => Array(perClass).fill(digit));
   const noise = gaussianNoise(labels.length, settings.latent_dim, seed);
   const candidates = await generate(noise, labels, settings.latent_dim, signal);
+  if (isFirefox) return {images: candidates, settings};
   const scoring = await score(candidates, labels, signal);
   const selected = selectQualityIndices({
     labels,
