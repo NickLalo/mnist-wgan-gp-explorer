@@ -28,6 +28,12 @@ const interceptionBootstrap = `
           else localHandler(input, init).then(resolve, reject);
         }
       };
+      window.addEventListener('error', event => {
+        if (!localHandler && event.target instanceof HTMLScriptElement && event.target.type === 'module') {
+          startupError = new Error('Could not start local inference');
+          settle();
+        }
+      }, true);
       window.__networkFetch = networkFetch;
       window.__installLocalInference = handler => { localHandler = handler; settle(); };
       window.__failLocalInference = error => { startupError = error; settle(); };

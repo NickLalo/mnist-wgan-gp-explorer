@@ -15,11 +15,12 @@ PAPER_COLOR = "#e8e5da"
 INK_COLOR = "#082a22"
 
 
-def tensor_to_image(image: Tensor, scale: int = 3) -> Image.Image:
+def tensor_to_image(image: Tensor, scale: float = 3) -> Image.Image:
     pixels = image.detach().float().squeeze().clamp(-1, 1).add(1).mul(127.5)
     pil = Image.fromarray(pixels.byte().cpu().numpy(), mode="L")
     colored = ImageOps.colorize(pil, black=PAPER_COLOR, white=INK_COLOR)
-    return colored.resize((28 * scale, 28 * scale), Image.Resampling.NEAREST)
+    side = max(1, round(28 * scale))
+    return colored.resize((side, side), Image.Resampling.NEAREST)
 
 
 def image_grid(
@@ -28,16 +29,17 @@ def image_grid(
     rows: int,
     columns: int,
     row_labels: list[str] | None = None,
-    scale: int = 3,
-    gap: int = 8,
+    scale: float = 3,
+    gap: float = 8,
 ) -> Image.Image:
-    tile = 28 * scale
+    tile = max(1, round(28 * scale))
+    gap = max(0, round(gap))
     label_width = 42 if row_labels else 0
     width = label_width + columns * tile + max(columns - 1, 0) * gap
     height = rows * tile + max(rows - 1, 0) * gap
     canvas = Image.new("RGB", (width, height), PAPER_COLOR)
     draw = ImageDraw.Draw(canvas)
-    font = ImageFont.load_default(size=max(12, scale * 6))
+    font = ImageFont.load_default(size=max(12, round(scale * 6)))
     for index, image in enumerate(images[: rows * columns]):
         row, column = divmod(index, columns)
         x = label_width + column * (tile + gap)
@@ -53,7 +55,7 @@ def image_grid(
 
 
 def single_digit_grid(
-    images: Tensor, *, columns: int = 10, scale: int = 3, gap: int = 8
+    images: Tensor, *, columns: int = 10, scale: float = 3, gap: float = 8
 ) -> Image.Image:
     columns = min(columns, len(images))
     rows = math.ceil(len(images) / columns)

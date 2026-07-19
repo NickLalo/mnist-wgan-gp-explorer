@@ -73,8 +73,11 @@
     .request-status.generating { top:50%; right:auto; left:50%; display:flex; align-items:baseline; gap:7px; min-width:250px; max-width:calc(100% - 32px); padding:13px 16px;
       transform:translate(-50%,-50%); background:var(--paper-light); font-size:14px; font-weight:850; letter-spacing:.02em; white-space:nowrap; }
     .loading-dots { display:inline-block; flex:0 0 7.5ch; width:7.5ch; overflow:hidden; white-space:nowrap; }
-    .loading-dots::after { content:"....."; display:block; width:0; overflow:hidden; letter-spacing:.5ch; animation:generation-dots 2.4s steps(5,end) infinite; }
+    .loading-dots::after { content:"....."; display:block; width:0; overflow:hidden; letter-spacing:.5ch; animation:generation-dots 2.8s steps(5,end) infinite; }
     @keyframes generation-dots { 0% { width:0; } 84% { width:7.5ch; } 100% { width:0; } }
+    .slow-generation-note { position:absolute; top:calc(100% + 10px); left:50%; width:max-content; max-width:min(430px,calc(100vw - 48px)); padding:9px 11px;
+      border:2px solid #642f27; border-radius:1px; color:#642f27; background:#efb0a2; box-shadow:3px 3px 0 var(--ink); font-size:11px; font-weight:800;
+      line-height:1.35; letter-spacing:0; text-align:center; white-space:normal; transform:translateX(-50%); }
     .request-status.error { color:#642f27; background:#efb0a2; }
     #explorePanel .output { overflow:hidden; }
     .explore-layout { width:100%; height:100%; min-height:0; display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); align-items:stretch; gap:24px; overflow:hidden; }
@@ -213,7 +216,7 @@
     <div class="control-field"><label for="oneSamples">Samples · <span id="oneValue">240</span></label>
       <div class="slider-tooltip" data-tooltip="Hover over the slider, hold Shift, and scroll to adjust by 1."><input id="oneSamples" type="range" min="1" max="5000" value="240"></div></div>
     <div class="control-field"><label for="oneZoom">Grid zoom · <span id="oneZoomValue">50%</span></label>
-      <input id="oneZoom" type="range" min="1" max="4" step="1" value="2"></div>
+      <input id="oneZoom" type="range" min="0" max="4" step="1" value="2"></div>
     <div class="control-field compact"><label for="oneSeed">Seed</label><input id="oneSeed" type="number" min="0" value="112"></div>
     <div class="control-hint">Up to 5,000 samples</div></div>
     <div class="output"><div id="oneStatus" class="request-status" role="status" aria-live="polite"></div><img id="oneImage" draggable="false" alt="Samples of one generated MNIST digit"></div></section>
@@ -263,17 +266,30 @@
     if(tab.dataset.panel==='explorePanel')requestAnimationFrame(()=>{fitExplorerToViewport();$('pad').focus({preventScroll:true});if(!$('exploreImage').src)explore();});
   });
   const activeRequests=new WeakMap();
+  const slowStatusTimers=new WeakMap();
   const statusFor=img=>$(img.id.replace('Image','Status'));
+  function clearSlowStatusTimer(img) {
+    const timer=slowStatusTimers.get(img);
+    if(timer!==undefined){clearTimeout(timer);slowStatusTimers.delete(img);}
+  }
   function setRequestStatus(img,message='',isError=false) {
+    clearSlowStatusTimer(img);
     const status=statusFor(img); status.textContent=message; status.removeAttribute('aria-label');
     status.classList.remove('generating');
     status.classList.toggle('visible',Boolean(message)); status.classList.toggle('error',isError);
   }
   function setGeneratingStatus(img) {
+    clearSlowStatusTimer(img);
     const status=statusFor(img), label=document.createElement('span'), dots=document.createElement('span');
     label.textContent='Generating Numbers';dots.className='loading-dots';dots.setAttribute('aria-hidden','true');
     status.replaceChildren(label,dots);status.setAttribute('aria-label','Generating numbers');
     status.classList.add('visible','generating');status.classList.remove('error');
+    slowStatusTimers.set(img,setTimeout(()=>{
+      if(!status.classList.contains('generating'))return;
+      const note=document.createElement('span');note.className='slow-generation-note';
+      note.textContent="Hmm, that's weird. It loaded faster on my machine";status.append(note);
+      status.setAttribute('aria-label',`Generating numbers. ${note.textContent}`);slowStatusTimers.delete(img);
+    },2000));
   }
   async function loadImage(img, url) {
     activeRequests.get(img)?.abort(); const controller=new AbortController(); activeRequests.set(img,controller);
@@ -305,8 +321,10 @@
     let timer; const wrapped=()=>{clearTimeout(timer);timer=setTimeout(callback,delay)};
     wrapped.flush=()=>{clearTimeout(timer);callback()}; return wrapped;
   }
+  const oneZoomLevels=[{percent:10,scale:.4},{percent:25,scale:1},{percent:50,scale:2},{percent:75,scale:3},{percent:100,scale:4}];
+  const oneZoomLevel=()=>oneZoomLevels[Number($('oneZoom').value)];
   const generateAll=()=>{if($('allSeed').value!=='')loadImage($('allImage'),`/api/all?samples=${$('allSamples').value}&seed=${$('allSeed').value}`)};
-  const generateOne=()=>{if(/^[0-9]$/.test($('oneDigit').value) && $('oneSeed').value!=='')loadImage($('oneImage'),`/api/digit?digit=${$('oneDigit').value}&samples=${$('oneSamples').value}&seed=${$('oneSeed').value}&scale=${$('oneZoom').value}`)};
+  const generateOne=()=>{if(/^[0-9]$/.test($('oneDigit').value) && $('oneSeed').value!=='')loadImage($('oneImage'),`/api/digit?digit=${$('oneDigit').value}&samples=${$('oneSamples').value}&seed=${$('oneSeed').value}&scale=${oneZoomLevel().scale}`)};
   const scheduleAll=debounce(generateAll), scheduleOne=debounce(generateOne);
   function bindSingleDigitInput(input,onValid) {
     let lastValid=input.value;
@@ -355,8 +373,8 @@
     const width=output.clientWidth-parseFloat(outputStyle.paddingLeft)-parseFloat(outputStyle.paddingRight);
     const height=output.clientHeight-parseFloat(outputStyle.paddingTop)-parseFloat(outputStyle.paddingBottom);
     if(width<=0||height<=0)return;
-    const scale=Number($('oneZoom').value), columns=Math.max(1,Math.floor(48/scale));
-    const tile=28*scale, gap=2*scale;
+    const scale=oneZoomLevel().scale, columns=Math.max(1,Math.round(48/scale));
+    const tile=Math.max(1,Math.round(28*scale)), gap=Math.max(0,Math.round(2*scale));
     const nativeWidth=columns*tile+(columns-1)*gap;
     const imageStyle=getComputedStyle($('oneImage'));
     const horizontalBorder=parseFloat(imageStyle.borderLeftWidth)+parseFloat(imageStyle.borderRightWidth);
@@ -386,7 +404,7 @@
   $('oneSamples').oninput=()=>{oneSamplesAutomatic=false;$('oneValue').textContent=$('oneSamples').value;scheduleOne()};
   $('oneSamples').onchange=scheduleOne.flush;
   $('oneZoom').oninput=()=>{
-    $('oneZoomValue').textContent=`${Number($('oneZoom').value)*25}%`;
+    $('oneZoomValue').textContent=`${oneZoomLevel().percent}%`;
     if(oneSamplesAutomatic)fitOneDigitToViewport();else scheduleOne();
   };
   $('oneZoom').onchange=()=>{if(oneSamplesAutomatic)fitOneDigitToViewport();else scheduleOne.flush()};
