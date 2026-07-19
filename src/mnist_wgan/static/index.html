@@ -73,8 +73,12 @@
     .request-status.generating { top:50%; right:auto; left:50%; display:flex; align-items:baseline; gap:7px; min-width:250px; max-width:calc(100% - 32px); padding:13px 16px;
       transform:translate(-50%,-50%); background:var(--paper-light); font-size:14px; font-weight:850; letter-spacing:.02em; white-space:nowrap; }
     .loading-dots { display:inline-block; flex:0 0 7.5ch; width:7.5ch; overflow:hidden; white-space:nowrap; }
-    .loading-dots::after { content:"....."; display:block; width:0; overflow:hidden; letter-spacing:.5ch; animation:generation-dots 2.8s steps(5,end) infinite; }
-    @keyframes generation-dots { 0% { width:0; } 84% { width:7.5ch; } 100% { width:0; } }
+    .loading-dots::after { content:"....."; display:block; width:7.5ch; overflow:hidden; letter-spacing:.5ch; clip-path:inset(0 100% 0 0); animation:generation-dots 2.8s linear infinite; }
+    @keyframes generation-dots {
+      0% { clip-path:inset(0 100% 0 0); animation-timing-function:steps(5,end); }
+      72% { clip-path:inset(0 0 0 0); animation-timing-function:steps(5,end); }
+      88%,100% { clip-path:inset(0 0 0 100%); }
+    }
     .slow-generation-note { position:absolute; top:calc(100% + 10px); left:50%; width:max-content; max-width:min(430px,calc(100vw - 48px)); padding:9px 11px;
       border:2px solid #642f27; border-radius:1px; color:#642f27; background:#efb0a2; box-shadow:3px 3px 0 var(--ink); font-size:11px; font-weight:800;
       line-height:1.35; letter-spacing:0; text-align:center; white-space:normal; transform:translateX(-50%); }
@@ -189,7 +193,7 @@
       #exploreImage { width:100%; height:auto; max-width:none; max-height:none; aspect-ratio:1; }
     }
     @media (prefers-reduced-motion:reduce) {
-      .loading-dots::after { width:7.5ch; animation:none; }
+      .loading-dots::after { clip-path:none; animation:none; }
     }
   </style>
 </head>
@@ -254,16 +258,22 @@
 </main>
 <script>
   const $ = id => document.getElementById(id);
+  const chooseRandomDigit=input=>{
+    input.value=String(Math.floor(Math.random()*10));input.dataset.lastValid=input.value;
+  };
   document.querySelectorAll('.tab').forEach(tab => tab.onclick=()=>{
     document.querySelectorAll('.tab,.panel').forEach(x=>x.classList.remove('active'));
     tab.classList.add('active'); $(tab.dataset.panel).classList.add('active');
     if(tab.dataset.panel==='allPanel' && allSamplesAutomatic)requestAnimationFrame(fitAllDigitsToViewport);
-    if(tab.dataset.panel==='onePanel')requestAnimationFrame(()=>{
-      if(oneSamplesAutomatic)fitOneDigitToViewport();
-      else if(!$('oneImage').src)generateOne();
-      else updateOneGridAlignment();
-    });
-    if(tab.dataset.panel==='explorePanel')requestAnimationFrame(()=>{fitExplorerToViewport();$('pad').focus({preventScroll:true});if(!$('exploreImage').src)explore();});
+    if(tab.dataset.panel==='onePanel'){
+      chooseRandomDigit($('oneDigit'));requestAnimationFrame(()=>{
+        if(oneSamplesAutomatic)fitOneDigitToViewport(false);else updateOneGridAlignment();
+        generateOne();
+      });
+    }
+    if(tab.dataset.panel==='explorePanel'){
+      chooseRandomDigit($('exploreDigit'));requestAnimationFrame(()=>{fitExplorerToViewport();$('pad').focus({preventScroll:true});explore();});
+    }
   });
   const activeRequests=new WeakMap();
   const slowStatusTimers=new WeakMap();
@@ -327,11 +337,11 @@
   const generateOne=()=>{if(/^[0-9]$/.test($('oneDigit').value) && $('oneSeed').value!=='')loadImage($('oneImage'),`/api/digit?digit=${$('oneDigit').value}&samples=${$('oneSamples').value}&seed=${$('oneSeed').value}&scale=${oneZoomLevel().scale}`)};
   const scheduleAll=debounce(generateAll), scheduleOne=debounce(generateOne);
   function bindSingleDigitInput(input,onValid) {
-    let lastValid=input.value;
+    input.dataset.lastValid=input.value;
     const commit=raw=>{
       const digit=String(raw??'').match(/[0-9]/)?.[0];
       if(digit===undefined)return;
-      const changed=lastValid!==digit; input.value=digit; lastValid=digit;
+      const changed=input.dataset.lastValid!==digit; input.value=digit; input.dataset.lastValid=digit;
       if(changed)onValid();
     };
     input.addEventListener('keydown',event=>{
@@ -349,7 +359,7 @@
     });
     input.addEventListener('input',()=>{
       const digit=input.value.match(/[0-9]/)?.[0];
-      if(digit===undefined){input.value=lastValid;return;}
+      if(digit===undefined){input.value=input.dataset.lastValid;return;}
       commit(digit);
     });
   }
@@ -367,7 +377,7 @@
     $('allSamples').value=fitted;$('allValue').textContent=fitted;
     if(changed||!$('allImage').src)generateAll();
   }
-  function fitOneDigitToViewport() {
+  function fitOneDigitToViewport(generateIfChanged=true) {
     const output=$('onePanel').querySelector('.output');
     const outputStyle=getComputedStyle(output);
     const width=output.clientWidth-parseFloat(outputStyle.paddingLeft)-parseFloat(outputStyle.paddingRight);
@@ -384,7 +394,7 @@
     const fitted=Math.max(1,Math.min(5000,rows*columns));
     const changed=Number($('oneSamples').value)!==fitted;
     $('oneSamples').value=fitted;$('oneValue').textContent=fitted;
-    if(changed||!$('oneImage').src)generateOne();
+    if(generateIfChanged&&(changed||!$('oneImage').src))generateOne();
   }
   function updateOneGridAlignment() {
     const output=$('onePanel').querySelector('.output'), image=$('oneImage');

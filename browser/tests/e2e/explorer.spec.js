@@ -38,6 +38,20 @@ test('all three modes generate locally without API network traffic', async ({pag
   await expect.poll(() => page.locator('#allStatus .loading-dots').evaluate(
     element => getComputedStyle(element, '::after').animationDuration,
   )).toBe('2.8s');
+  const dotAnimation = await page.locator('#allStatus .loading-dots').evaluate(element => {
+    const animation = element.getAnimations({subtree: true})[0];
+    animation.pause();
+    const clipAt = milliseconds => {
+      animation.currentTime = milliseconds;
+      const values = getComputedStyle(element, '::after').clipPath.match(/[\d.]+/g).map(Number);
+      return {right: values[1], left: values[3]};
+    };
+    return {revealing: clipAt(1400), removing: clipAt(2240)};
+  });
+  expect(dotAnimation.revealing.right).toBeGreaterThan(0);
+  expect(dotAnimation.revealing.left).toBe(0);
+  expect(dotAnimation.removing.right).toBe(0);
+  expect(dotAnimation.removing.left).toBeGreaterThan(0);
   await expect(page.locator('#allStatus .slow-generation-note')).toHaveText(
     "Hmm, that's weird. It loaded faster on my machine",
     {timeout: 2700},
@@ -52,7 +66,12 @@ test('all three modes generate locally without API network traffic', async ({pag
   const oneTab = page.locator('[data-panel="onePanel"]');
   const allTabBefore = await elementGeometry(allTab);
   const oneTabBefore = await elementGeometry(oneTab);
+  await page.evaluate(() => {
+    const digits = [0.7, 0.4];
+    Math.random = () => digits.shift() ?? 0;
+  });
   await oneTab.click();
+  await expect(page.locator('#oneDigit')).toHaveValue('7');
   expect(await elementGeometry(allTab)).toEqual(allTabBefore);
   expect(await elementGeometry(oneTab)).toEqual(oneTabBefore);
   await page.locator('#oneSamples').evaluate(element => {
@@ -75,6 +94,7 @@ test('all three modes generate locally without API network traffic', async ({pag
   await expect.poll(() => oneImage.evaluate(element => element.naturalWidth)).toBe(719);
 
   await page.locator('[data-panel="explorePanel"]').click();
+  await expect(page.locator('#exploreDigit')).toHaveValue('4');
   const exploreImage = await waitForGeneratedImage(page, '#exploreImage');
   await expect.poll(() => exploreImage.evaluate(element => element.naturalWidth)).toBe(280);
   await page.locator('#pad').press('ArrowRight');
