@@ -35,9 +35,12 @@ test('all three modes generate locally without API network traffic', async ({pag
   await expect(page.locator('#allStatus')).toHaveClass(/generating/);
   await expect(page.locator('#allStatus')).toContainText('Generating Numbers');
   await expect(page.locator('#allStatus .slow-generation-note')).toHaveCount(0);
+  await expect.poll(() => page.locator('#allStatus .loading-dots').evaluate(
+    element => getComputedStyle(element, '::after').animationDuration,
+  )).toBe('2.8s');
   await expect(page.locator('#allStatus .slow-generation-note')).toHaveText(
     "Hmm, that's weird. It loaded faster on my machine",
-    {timeout: 6000},
+    {timeout: 2700},
   );
   const allImage = await waitForGeneratedImage(page, '#allImage');
   await expect(page.locator('#allStatus')).not.toBeVisible();

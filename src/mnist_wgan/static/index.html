@@ -73,7 +73,7 @@
     .request-status.generating { top:50%; right:auto; left:50%; display:flex; align-items:baseline; gap:7px; min-width:250px; max-width:calc(100% - 32px); padding:13px 16px;
       transform:translate(-50%,-50%); background:var(--paper-light); font-size:14px; font-weight:850; letter-spacing:.02em; white-space:nowrap; }
     .loading-dots { display:inline-block; flex:0 0 7.5ch; width:7.5ch; overflow:hidden; white-space:nowrap; }
-    .loading-dots::after { content:"....."; display:block; width:0; overflow:hidden; letter-spacing:.5ch; animation:generation-dots 2.4s steps(5,end) infinite; }
+    .loading-dots::after { content:"....."; display:block; width:0; overflow:hidden; letter-spacing:.5ch; animation:generation-dots 2.8s steps(5,end) infinite; }
     @keyframes generation-dots { 0% { width:0; } 84% { width:7.5ch; } 100% { width:0; } }
     .slow-generation-note { position:absolute; top:calc(100% + 10px); left:50%; width:max-content; max-width:min(430px,calc(100vw - 48px)); padding:9px 11px;
       border:2px solid #642f27; border-radius:1px; color:#642f27; background:#efb0a2; box-shadow:3px 3px 0 var(--ink); font-size:11px; font-weight:800;
@@ -289,7 +289,7 @@
       const note=document.createElement('span');note.className='slow-generation-note';
       note.textContent="Hmm, that's weird. It loaded faster on my machine";status.append(note);
       status.setAttribute('aria-label',`Generating numbers. ${note.textContent}`);slowStatusTimers.delete(img);
-    },3000));
+    },2000));
   }
   async function loadImage(img, url) {
     activeRequests.get(img)?.abort(); const controller=new AbortController(); activeRequests.set(img,controller);
