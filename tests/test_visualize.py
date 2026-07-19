@@ -42,7 +42,10 @@ def test_single_digit_grid_supports_dense_zoom():
     images = torch.zeros(250, 1, 28, 28)
     full_size = single_digit_grid(images, columns=12, scale=4, gap=8)
     zoomed_out = single_digit_grid(images, columns=48, scale=1, gap=2)
+    ten_percent = single_digit_grid(images, columns=120, scale=0.4, gap=0.8)
     assert abs(zoomed_out.width - full_size.width) <= 8
+    assert abs(ten_percent.width - full_size.width) <= 8
+    assert ten_percent.height < zoomed_out.height
     assert zoomed_out.height < full_size.height
 
 

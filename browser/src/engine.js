@@ -5,7 +5,10 @@ import {createSerialExecutor} from './serial.js';
 
 const assetPath = path => `${import.meta.env.BASE_URL}${path}`;
 const isFirefox = navigator.userAgent.includes('Firefox/');
-const useWebGpu = Boolean(navigator.gpu) && !isFirefox;
+const isMobile = navigator.userAgentData?.mobile === true
+  || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+const useLightweightGeneration = isFirefox || isMobile;
+const useWebGpu = Boolean(navigator.gpu) && !useLightweightGeneration;
 const runtimePromise = (
   useWebGpu ? import('onnxruntime-web/webgpu') : import('onnxruntime-web/wasm')
 ).then(runtime => {
@@ -118,14 +121,15 @@ async function score(images, labels, signal) {
 async function qualityGenerate(classes, requestedPerClass, seed, signal) {
   const settings = await manifest();
   // ONNX Runtime does not support its WebGPU provider in Firefox, where the
-  // optional WASM quality pass is much slower than generation itself.
-  const perClass = isFirefox
+  // optional WASM quality pass is much slower than generation itself. Mobile
+  // browsers also avoid the second model and JSEP runtime to limit memory use.
+  const perClass = useLightweightGeneration
     ? requestedPerClass
     : candidateCount(requestedPerClass, settings.sampling.quality_oversample);
   const labels = classes.flatMap(digit => Array(perClass).fill(digit));
   const noise = gaussianNoise(labels.length, settings.latent_dim, seed);
   const candidates = await generate(noise, labels, settings.latent_dim, signal);
-  if (isFirefox) return {images: candidates, settings};
+  if (useLightweightGeneration) return {images: candidates, settings};
   const scoring = await score(candidates, labels, signal);
   const selected = selectQualityIndices({
     labels,
@@ -169,7 +173,7 @@ async function oneDigit(parameters, signal) {
   const digit = integerParameter(parameters, 'digit', 0, 9);
   const samples = integerParameter(parameters, 'samples', 1, 5000);
   const seed = integerParameter(parameters, 'seed', 0, 2 ** 31 - 1);
-  const scale = integerParameter(parameters, 'scale', 1, 4);
+  const scale = floatParameter(parameters, 'scale', 0.4, 4);
   const {images, settings} = await qualityGenerate([digit], samples, seed, signal);
   return renderOneDigit(images, samples, scale, settings.rendering.paper_color, settings.rendering.ink_color);
 }

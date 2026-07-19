@@ -2,9 +2,9 @@
 
 This directory builds a static version of the MNIST WGAN-GP Explorer for GitHub Pages. The EMA
 generator and optional quality filter run with ONNX Runtime inside the visitor's browser. Firefox
-uses the generator output directly because its supported WebAssembly path makes the quality filter
-much slower. Generated images, labels, seeds, and latent coordinates are never sent to an inference
-server.
+and mobile browsers use the generator output directly. This keeps Firefox responsive on its
+supported WebAssembly path and avoids loading a second model into memory on phones. Generated
+images, labels, seeds, and latent coordinates are never sent to an inference server.
 
 The browser application deliberately remains separate from the FastAPI application. During a
 build, `scripts/prepare-index.mjs` reuses the established HTML and CSS from

@@ -67,15 +67,18 @@ export async function renderAllDigits(images, columns, paperColor, inkColor) {
 }
 
 export async function renderOneDigit(images, count, scale, paperColor, inkColor) {
-  const columns = Math.min(Math.max(1, Math.floor(48 / scale)), count);
-  const rows = Math.ceil(count / columns), gap = 2 * scale, tile = IMAGE_SIDE * scale;
+  const columns = Math.min(Math.max(1, Math.round(48 / scale)), count);
+  const rows = Math.ceil(count / columns);
+  const gap = Math.max(0, Math.round(2 * scale));
+  const tile = Math.max(1, Math.round(IMAGE_SIDE * scale));
+  const renderScale = tile / IMAGE_SIDE;
   const {canvas, context} = createCanvas(
     columns * tile + Math.max(columns - 1, 0) * gap,
     rows * tile + Math.max(rows - 1, 0) * gap,
     paperColor,
   );
   for (let index = 0; index < count; index += 1) {
-    drawImage(context, images, index, (index % columns) * (tile + gap), Math.floor(index / columns) * (tile + gap), scale, paperColor, inkColor);
+    drawImage(context, images, index, (index % columns) * (tile + gap), Math.floor(index / columns) * (tile + gap), renderScale, paperColor, inkColor);
   }
   return pngResponse(canvas);
 }

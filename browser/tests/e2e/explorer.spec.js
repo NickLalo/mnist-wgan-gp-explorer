@@ -61,6 +61,16 @@ test('all three modes generate locally without API network traffic', async ({pag
   await expect.poll(() => oneImage.evaluate(element => element.naturalWidth)).toBeGreaterThan(1000);
   await page.screenshot({path: testInfo.outputPath('one-digit.png'), fullPage: true});
 
+  const previousOneImage = await oneImage.getAttribute('src');
+  await page.locator('#oneZoom').evaluate(element => {
+    element.value = '0';
+    element.dispatchEvent(new Event('input', {bubbles: true}));
+    element.dispatchEvent(new Event('change', {bubbles: true}));
+  });
+  await expect(page.locator('#oneZoomValue')).toHaveText('10%');
+  await expect.poll(() => oneImage.getAttribute('src')).not.toBe(previousOneImage);
+  await expect.poll(() => oneImage.evaluate(element => element.naturalWidth)).toBe(719);
+
   await page.locator('[data-panel="explorePanel"]').click();
   const exploreImage = await waitForGeneratedImage(page, '#exploreImage');
   await expect.poll(() => exploreImage.evaluate(element => element.naturalWidth)).toBe(280);

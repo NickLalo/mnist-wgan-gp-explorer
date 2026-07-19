@@ -75,13 +75,13 @@ class InferenceEngine:
         return to_png_bytes(grid)
 
     @torch.inference_mode()
-    def one_digit(self, digit: int, samples: int, seed: int, scale: int = 2) -> bytes:
+    def one_digit(self, digit: int, samples: int, seed: int, scale: float = 2) -> bytes:
         labels = torch.full((samples,), digit, device=self.device)
         images = self._quality_generate(labels, samples, seed)
         # Keep the encoded canvas around the same width at every zoom level.
         # Smaller tiles therefore create more columns and dramatically fewer
         # rows, allowing thousands of samples to remain practical to inspect.
-        columns = max(1, 48 // scale)
+        columns = max(1, round(48 / scale))
         return to_png_bytes(
             single_digit_grid(images, columns=columns, scale=scale, gap=2 * scale)
         )
@@ -150,7 +150,7 @@ def create_app(
         digit: int = Query(3, ge=0, le=9),
         samples: int = Query(240, ge=1, le=5000),
         seed: int = Query(112, ge=0, le=2**31 - 1),
-        scale: int = Query(2, ge=1, le=4),
+        scale: float = Query(2, ge=0.4, le=4),
     ) -> Response:
         return Response(engine.one_digit(digit, samples, seed, scale), media_type="image/png")
 
