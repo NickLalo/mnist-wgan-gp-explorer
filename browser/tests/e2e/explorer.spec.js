@@ -75,8 +75,8 @@ test('all three modes generate locally without API network traffic', async ({pag
   const allTabBefore = await elementGeometry(allTab);
   const oneTabBefore = await elementGeometry(oneTab);
   await page.evaluate(() => {
-    const digits = [0.7, 0.4];
-    Math.random = () => digits.shift() ?? 0;
+    const randomValues = [0.7, 0.4, 0.25, 0.6, 0.8];
+    Math.random = () => randomValues.shift() ?? 0;
   });
   await oneTab.click();
   await expect(page.locator('#oneDigit')).toHaveValue('7');
@@ -101,10 +101,17 @@ test('all three modes generate locally without API network traffic', async ({pag
   await expect.poll(() => oneImage.getAttribute('src')).not.toBe(previousOneImage);
   await expect.poll(() => oneImage.evaluate(element => element.naturalWidth)).toBe(719);
 
-  await page.locator('[data-panel="explorePanel"]').click();
+  const exploreTab = page.locator('[data-panel="explorePanel"]');
+  await exploreTab.click();
   await expect(page.locator('#exploreDigit')).toHaveValue('4');
+  await expect(page.locator('#exploreSeed')).toHaveValue('536870912');
   const exploreImage = await waitForGeneratedImage(page, '#exploreImage');
   await expect.poll(() => exploreImage.evaluate(element => element.naturalWidth)).toBe(280);
+  const firstExploreImage = await exploreImage.getAttribute('src');
+  await exploreTab.click();
+  await expect(page.locator('#exploreDigit')).toHaveValue('6');
+  await expect(page.locator('#exploreSeed')).toHaveValue('1717986918');
+  await expect.poll(() => exploreImage.getAttribute('src')).not.toBe(firstExploreImage);
   await page.locator('#pad').press('ArrowRight');
   await expect(page.locator('#coords')).toContainText('x 0.17');
   await page.screenshot({path: testInfo.outputPath('latent-explorer.png'), fullPage: true});
