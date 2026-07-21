@@ -273,6 +273,7 @@
   const chooseRandomDigit=input=>{
     input.value=String(Math.floor(Math.random()*10));input.dataset.lastValid=input.value;
   };
+  const chooseRandomSeed=input=>{input.value=String(Math.floor(Math.random()*2**31))};
   document.querySelectorAll('.tab').forEach(tab => tab.onclick=()=>{
     scheduleAllSlider.cancel();scheduleOneSlider.cancel();
     document.querySelectorAll('.tab,.panel').forEach(x=>x.classList.remove('active'));
@@ -285,7 +286,8 @@
       });
     }
     if(tab.dataset.panel==='explorePanel'){
-      chooseRandomDigit($('exploreDigit'));requestAnimationFrame(()=>{fitExplorerToViewport();$('pad').focus({preventScroll:true});explore();});
+      chooseRandomDigit($('exploreDigit'));chooseRandomSeed($('exploreSeed'));
+      requestAnimationFrame(()=>{fitExplorerToViewport();$('pad').focus({preventScroll:true});explore();});
     }
   });
   const activeRequests=new WeakMap();
