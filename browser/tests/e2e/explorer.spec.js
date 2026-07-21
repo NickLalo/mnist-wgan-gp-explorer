@@ -35,23 +35,31 @@ test('all three modes generate locally without API network traffic', async ({pag
   await expect(page.locator('#allStatus')).toHaveClass(/generating/);
   await expect(page.locator('#allStatus')).toContainText('Generating Numbers');
   await expect(page.locator('#allStatus .slow-generation-note')).toHaveCount(0);
-  await expect.poll(() => page.locator('#allStatus .loading-dots').evaluate(
-    element => getComputedStyle(element, '::after').animationDuration,
+  await expect(page.locator('#allStatus .loading-dot')).toHaveCount(5);
+  await expect.poll(() => page.locator('#allStatus .loading-dot').first().evaluate(
+    element => getComputedStyle(element).animationDuration,
   )).toBe('2.8s');
   const dotAnimation = await page.locator('#allStatus .loading-dots').evaluate(element => {
-    const animation = element.getAnimations({subtree: true})[0];
-    animation.pause();
-    const clipAt = milliseconds => {
-      animation.currentTime = milliseconds;
-      const values = getComputedStyle(element, '::after').clipPath.match(/[\d.]+/g).map(Number);
-      return {right: values[1], left: values[3]};
+    const dots = [...element.querySelectorAll('.loading-dot')];
+    const animations = dots.map(dot => dot.getAnimations()[0]);
+    animations.forEach(animation => animation.pause());
+    const opacityAt = milliseconds => {
+      animations.forEach(animation => {
+        animation.currentTime = milliseconds;
+      });
+      return dots.map(dot => Number(getComputedStyle(dot).opacity));
     };
-    return {revealing: clipAt(1400), removing: clipAt(2240)};
+    return {
+      revealing: opacityAt(1400),
+      allVisible: opacityAt(1750),
+      removingLast: opacityAt(2050),
+      removingPrevious: opacityAt(2180),
+    };
   });
-  expect(dotAnimation.revealing.right).toBeGreaterThan(0);
-  expect(dotAnimation.revealing.left).toBe(0);
-  expect(dotAnimation.removing.right).toBe(0);
-  expect(dotAnimation.removing.left).toBeGreaterThan(0);
+  expect(dotAnimation.revealing).toEqual([1, 1, 1, 1, 0]);
+  expect(dotAnimation.allVisible).toEqual([1, 1, 1, 1, 1]);
+  expect(dotAnimation.removingLast).toEqual([1, 1, 1, 1, 0]);
+  expect(dotAnimation.removingPrevious).toEqual([1, 1, 1, 0, 0]);
   await expect(page.locator('#allStatus .slow-generation-note')).toHaveText(
     "Hmm, that's weird. It loaded faster on my machine",
     {timeout: 2700},
@@ -103,6 +111,60 @@ test('all three modes generate locally without API network traffic', async ({pag
 
   expect(apiRequests).toEqual([]);
   expect(consoleErrors).toEqual([]);
+});
+
+test('waits 400ms after All Digits and One Digit slider changes', async ({page}) => {
+  const apiCalls = pathname => page.evaluate(path => (
+    window.__localApiCalls.filter(call => call.pathname === path)
+  ), pathname);
+  const moveSlider = (selector, value, commit = false) => page.locator(selector).evaluate((element, update) => {
+    element.value = update.value;
+    element.dispatchEvent(new Event('input', {bubbles: true}));
+    if (update.commit) element.dispatchEvent(new Event('change', {bubbles: true}));
+    window.__lastSliderChange = performance.now();
+  }, {value, commit});
+
+  await page.goto('/');
+  await waitForGeneratedImage(page, '#allImage');
+  await page.evaluate(() => {
+    window.__localApiCalls = [];
+    const localFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const value = input instanceof Request ? input.url : input;
+      const pathname = new URL(String(value), window.location.href).pathname;
+      if (pathname.startsWith('/api/')) window.__localApiCalls.push({pathname, at: performance.now()});
+      return localFetch(input, init);
+    };
+  });
+
+  await moveSlider('#allSamples', '10');
+  await page.waitForTimeout(200);
+  await moveSlider('#allSamples', '11', true);
+  await page.waitForTimeout(300);
+  expect(await apiCalls('/api/all')).toEqual([]);
+  await expect.poll(async () => (await apiCalls('/api/all')).length).toBe(1);
+  expect((await apiCalls('/api/all'))[0].at - await page.evaluate(() => window.__lastSliderChange)).toBeGreaterThanOrEqual(375);
+
+  await page.locator('[data-panel="onePanel"]').click();
+  await waitForGeneratedImage(page, '#oneImage');
+  await expect(page.locator('#oneSamples')).toHaveAttribute('max', '10000');
+  await page.evaluate(() => {
+    window.__localApiCalls = [];
+  });
+  await moveSlider('#oneSamples', '60');
+  await page.waitForTimeout(200);
+  await moveSlider('#oneSamples', '61', true);
+  await page.waitForTimeout(300);
+  expect(await apiCalls('/api/digit')).toEqual([]);
+  await expect.poll(async () => (await apiCalls('/api/digit')).length).toBe(1);
+  expect((await apiCalls('/api/digit'))[0].at - await page.evaluate(() => window.__lastSliderChange)).toBeGreaterThanOrEqual(375);
+
+  const invalid = await page.evaluate(async () => {
+    const response = await fetch('/api/digit?digit=3&samples=10001&seed=112&scale=1');
+    return {status: response.status, body: await response.json()};
+  });
+  expect(invalid.status).toBe(400);
+  expect(invalid.body.detail).toContain('samples must be an integer from 1 to 10000');
 });
 
 test('reports a local inference module startup failure', async ({page}) => {
