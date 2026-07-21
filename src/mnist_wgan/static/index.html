@@ -19,7 +19,8 @@
     header p { flex:1; margin:0; color:var(--muted); font:italic 12px/1.25 ui-serif,Georgia,serif; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .tabs { position:relative; z-index:2; flex:0 0 auto; display:flex; align-items:flex-end; gap:5px; margin:4px 0 -2px; overflow:auto; padding:0 4px 4px 0; }
     .tab { border:2px solid var(--ink); border-radius:3px 3px 0 0; padding:7px 13px; color:var(--ink); background:var(--paper-dark); box-shadow:2px 2px 0 var(--ink);
-      cursor:pointer; font:800 12px/1.15 ui-monospace,SFMono-Regular,Menlo,monospace; text-transform:uppercase; letter-spacing:.02em; }
+      cursor:pointer; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+      font:800 12px/1.15 ui-monospace,SFMono-Regular,Menlo,monospace; text-transform:uppercase; letter-spacing:.02em; }
     .tab:hover { background:var(--paper-light); }
     .tab.active { background:var(--mint); box-shadow:2px 2px 0 var(--ink),inset 0 -3px 0 #4eac7e; }
     .panel { display:none; margin:0 5px 5px 0; overflow:hidden; background:var(--paper-light); border:2px solid var(--ink); border-radius:4px; box-shadow:4px 4px 0 var(--ink); }
