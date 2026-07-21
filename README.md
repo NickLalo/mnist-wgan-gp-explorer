@@ -26,7 +26,7 @@
 ## Features
 
 - **All digits:** generate rows for labels 0–9 in a grid that adapts to the available screen space.
-- **One digit:** inspect up to 5,000 variations, adjust density, and zoom out to find rare failures.
+- **One digit:** inspect up to 10,000 variations, adjust density, and zoom out to find rare failures.
 - **Latent explorer:** drag, use arrow keys or WASD, and change the visible plane with Ctrl+scroll.
 - **Conditional WGAN-GP:** residual generator, projection critic, bounded wrong-label margin, and
   exponential-moving-average (EMA) inference weights.

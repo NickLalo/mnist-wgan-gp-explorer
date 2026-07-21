@@ -73,13 +73,18 @@
     .request-status.visible { display:block; }
     .request-status.generating { top:50%; right:auto; left:50%; display:flex; align-items:baseline; gap:7px; min-width:250px; max-width:calc(100% - 32px); padding:13px 16px;
       transform:translate(-50%,-50%); background:var(--paper-light); font-size:14px; font-weight:850; letter-spacing:.02em; white-space:nowrap; }
-    .loading-dots { display:inline-block; flex:0 0 7.5ch; width:7.5ch; overflow:hidden; white-space:nowrap; }
-    .loading-dots::after { content:"....."; display:block; width:7.5ch; overflow:hidden; letter-spacing:.5ch; clip-path:inset(0 100% 0 0); animation:generation-dots 2.8s linear infinite; }
-    @keyframes generation-dots {
-      0% { clip-path:inset(0 100% 0 0); animation-timing-function:steps(5,end); }
-      72% { clip-path:inset(0 0 0 0); animation-timing-function:steps(5,end); }
-      88%,100% { clip-path:inset(0 0 0 100%); }
-    }
+    .loading-dots { display:inline-flex; flex:0 0 7.5ch; width:7.5ch; white-space:nowrap; }
+    .loading-dot { display:inline-block; flex:0 0 1.5ch; width:1.5ch; opacity:0; animation-duration:2.8s; animation-timing-function:step-end; animation-iteration-count:infinite; }
+    .loading-dot:nth-child(1) { animation-name:generation-dot-1; }
+    .loading-dot:nth-child(2) { animation-name:generation-dot-2; }
+    .loading-dot:nth-child(3) { animation-name:generation-dot-3; }
+    .loading-dot:nth-child(4) { animation-name:generation-dot-4; }
+    .loading-dot:nth-child(5) { animation-name:generation-dot-5; }
+    @keyframes generation-dot-1 { 0%,11% { opacity:0; } 12%,87% { opacity:1; } 88%,100% { opacity:0; } }
+    @keyframes generation-dot-2 { 0%,23% { opacity:0; } 24%,83% { opacity:1; } 84%,100% { opacity:0; } }
+    @keyframes generation-dot-3 { 0%,35% { opacity:0; } 36%,79% { opacity:1; } 80%,100% { opacity:0; } }
+    @keyframes generation-dot-4 { 0%,47% { opacity:0; } 48%,75% { opacity:1; } 76%,100% { opacity:0; } }
+    @keyframes generation-dot-5 { 0%,59% { opacity:0; } 60%,71% { opacity:1; } 72%,100% { opacity:0; } }
     .slow-generation-note { position:absolute; top:calc(100% + 10px); left:50%; width:max-content; max-width:min(430px,calc(100vw - 48px)); padding:9px 11px;
       border:2px solid #642f27; border-radius:1px; color:#642f27; background:#efb0a2; box-shadow:3px 3px 0 var(--ink); font-size:11px; font-weight:800;
       line-height:1.35; letter-spacing:0; text-align:center; white-space:normal; transform:translateX(-50%); }
@@ -194,7 +199,7 @@
       #exploreImage { width:100%; height:auto; max-width:none; max-height:none; aspect-ratio:1; }
     }
     @media (prefers-reduced-motion:reduce) {
-      .loading-dots::after { clip-path:none; animation:none; }
+      .loading-dot { opacity:1; animation:none; }
     }
   </style>
 </head>
@@ -213,17 +218,17 @@
       <div class="slider-tooltip" data-tooltip="Hover over the slider, hold Shift, and scroll to adjust by 1."><input id="allSamples" type="range" min="1" max="100" value="20"></div></div>
     <div class="control-field compact"><label for="allSeed">Seed</label><input id="allSeed" type="number" min="0" value="112"></div>
     <div class="control-hint">Hover over the slider, hold Shift, and scroll to adjust by 1</div></div>
-    <div class="output"><div id="allStatus" class="request-status visible generating" role="status" aria-live="polite" aria-label="Generating numbers"><span>Generating Numbers</span><span class="loading-dots" aria-hidden="true"></span></div><img id="allImage" draggable="false" alt="Ten rows of generated MNIST digits"></div></section>
+    <div class="output"><div id="allStatus" class="request-status visible generating" role="status" aria-live="polite" aria-label="Generating numbers"><span>Generating Numbers</span><span class="loading-dots" aria-hidden="true"><span class="loading-dot">.</span><span class="loading-dot">.</span><span class="loading-dot">.</span><span class="loading-dot">.</span><span class="loading-dot">.</span></span></div><img id="allImage" draggable="false" alt="Ten rows of generated MNIST digits"></div></section>
 
   <section id="onePanel" class="panel"><div class="controls">
     <div class="control-intro"><h2>Single-class study</h2><p>Type or press 0–9</p></div>
     <div class="control-field compact"><label for="oneDigit">Digit</label><input id="oneDigit" class="digit-input" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" autocomplete="off" value="3"></div>
     <div class="control-field"><label for="oneSamples">Samples · <span id="oneValue">240</span></label>
-      <div class="slider-tooltip" data-tooltip="Hover over the slider, hold Shift, and scroll to adjust by 1."><input id="oneSamples" type="range" min="1" max="5000" value="240"></div></div>
+      <div class="slider-tooltip" data-tooltip="Hover over the slider, hold Shift, and scroll to adjust by 1."><input id="oneSamples" type="range" min="1" max="10000" value="240"></div></div>
     <div class="control-field"><label for="oneZoom">Grid zoom · <span id="oneZoomValue">50%</span></label>
       <input id="oneZoom" type="range" min="0" max="4" step="1" value="2"></div>
     <div class="control-field compact"><label for="oneSeed">Seed</label><input id="oneSeed" type="number" min="0" value="112"></div>
-    <div class="control-hint">Up to 5,000 samples</div></div>
+    <div class="control-hint">Up to 10,000 samples</div></div>
     <div class="output"><div id="oneStatus" class="request-status" role="status" aria-live="polite"></div><img id="oneImage" draggable="false" alt="Samples of one generated MNIST digit"></div></section>
 
   <section id="explorePanel" class="panel"><div class="controls">
@@ -259,10 +264,17 @@
 </main>
 <script>
   const $ = id => document.getElementById(id);
+  const isMobileDevice=navigator.userAgentData?.mobile===true||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  const createLoadingDots=()=>{
+    const dots=document.createElement('span');dots.className='loading-dots';dots.setAttribute('aria-hidden','true');
+    for(let index=0;index<5;index+=1){const dot=document.createElement('span');dot.className='loading-dot';dot.textContent='.';dots.append(dot);}
+    return dots;
+  };
   const chooseRandomDigit=input=>{
     input.value=String(Math.floor(Math.random()*10));input.dataset.lastValid=input.value;
   };
   document.querySelectorAll('.tab').forEach(tab => tab.onclick=()=>{
+    scheduleAllSlider.cancel();scheduleOneSlider.cancel();
     document.querySelectorAll('.tab,.panel').forEach(x=>x.classList.remove('active'));
     tab.classList.add('active'); $(tab.dataset.panel).classList.add('active');
     if(tab.dataset.panel==='allPanel' && allSamplesAutomatic)requestAnimationFrame(fitAllDigitsToViewport);
@@ -291,8 +303,8 @@
   }
   function setGeneratingStatus(img) {
     clearSlowStatusTimer(img);
-    const status=statusFor(img), label=document.createElement('span'), dots=document.createElement('span');
-    label.textContent='Generating Numbers';dots.className='loading-dots';dots.setAttribute('aria-hidden','true');
+    const status=statusFor(img), label=document.createElement('span'), dots=createLoadingDots();
+    label.textContent='Generating Numbers';
     status.replaceChildren(label,dots);status.setAttribute('aria-label','Generating numbers');
     status.classList.add('visible','generating');status.classList.remove('error');
     slowStatusTimers.set(img,setTimeout(()=>{
@@ -330,13 +342,28 @@
   }
   function debounce(callback, delay=250) {
     let timer; const wrapped=()=>{clearTimeout(timer);timer=setTimeout(callback,delay)};
-    wrapped.flush=()=>{clearTimeout(timer);callback()}; return wrapped;
+    wrapped.cancel=()=>{clearTimeout(timer);timer=undefined};
+    wrapped.flush=()=>{wrapped.cancel();callback()}; return wrapped;
   }
   const oneZoomLevels=[{percent:10,scale:.4},{percent:25,scale:1},{percent:50,scale:2},{percent:75,scale:3},{percent:100,scale:4}];
   const oneZoomLevel=()=>oneZoomLevels[Number($('oneZoom').value)];
+  const oneGridPixels=(samples,scale)=>{
+    const columns=Math.min(Math.max(1,Math.round(48/scale)),samples),rows=Math.ceil(samples/columns);
+    const tile=Math.max(1,Math.round(28*scale)),gap=Math.max(0,Math.round(2*scale));
+    return (columns*tile+Math.max(columns-1,0)*gap)*(rows*tile+Math.max(rows-1,0)*gap);
+  };
+  const fitOneZoomToMobileCanvas=()=>{
+    if(!isMobileDevice)return;
+    let index=Number($('oneZoom').value),samples=Number($('oneSamples').value);
+    while(index>0&&oneGridPixels(samples,oneZoomLevels[index].scale)>16000000)index-=1;
+    if(index!==Number($('oneZoom').value)){$('oneZoom').value=String(index);$('oneZoomValue').textContent=`${oneZoomLevels[index].percent}%`;}
+  };
   const generateAll=()=>{if($('allSeed').value!=='')loadImage($('allImage'),`/api/all?samples=${$('allSamples').value}&seed=${$('allSeed').value}`)};
-  const generateOne=()=>{if(/^[0-9]$/.test($('oneDigit').value) && $('oneSeed').value!=='')loadImage($('oneImage'),`/api/digit?digit=${$('oneDigit').value}&samples=${$('oneSamples').value}&seed=${$('oneSeed').value}&scale=${oneZoomLevel().scale}`)};
+  const generateOne=()=>{fitOneZoomToMobileCanvas();if(/^[0-9]$/.test($('oneDigit').value) && $('oneSeed').value!=='')loadImage($('oneImage'),`/api/digit?digit=${$('oneDigit').value}&samples=${$('oneSamples').value}&seed=${$('oneSeed').value}&scale=${oneZoomLevel().scale}`)};
   const scheduleAll=debounce(generateAll), scheduleOne=debounce(generateOne);
+  const scheduleAllSlider=debounce(generateAll,400), scheduleOneSlider=debounce(generateOne,400);
+  const scheduleAllControl=()=>{scheduleAllSlider.cancel();scheduleAll()};
+  const scheduleOneControl=()=>{scheduleOneSlider.cancel();scheduleOne()};
   function bindSingleDigitInput(input,onValid) {
     input.dataset.lastValid=input.value;
     const commit=raw=>{
@@ -392,7 +419,7 @@
     const verticalBorder=parseFloat(imageStyle.borderTopWidth)+parseFloat(imageStyle.borderBottomWidth);
     const nativeHeightCapacity=Math.max(1,height-verticalBorder)*nativeWidth/Math.max(1,width-horizontalBorder);
     const rows=Math.max(1,Math.floor((nativeHeightCapacity+gap)/(tile+gap)));
-    const fitted=Math.max(1,Math.min(5000,rows*columns));
+    const fitted=Math.max(1,Math.min(10000,rows*columns));
     const changed=Number($('oneSamples').value)!==fitted;
     $('oneSamples').value=fitted;$('oneValue').textContent=fitted;
     if(generateIfChanged&&(changed||!$('oneImage').src))generateOne();
@@ -409,18 +436,18 @@
       if(fits)output.scrollTop=0;
     });
   }
-  $('allSamples').oninput=()=>{allSamplesAutomatic=false;$('allPanel').querySelector('.output').classList.remove('all-grid-fits');$('allValue').textContent=$('allSamples').value;scheduleAll()};
-  $('allSamples').onchange=scheduleAll.flush;
-  $('allSeed').oninput=scheduleAll;
-  $('oneSamples').oninput=()=>{oneSamplesAutomatic=false;$('oneValue').textContent=$('oneSamples').value;scheduleOne()};
-  $('oneSamples').onchange=scheduleOne.flush;
+  $('allSamples').oninput=()=>{allSamplesAutomatic=false;$('allPanel').querySelector('.output').classList.remove('all-grid-fits');$('allValue').textContent=$('allSamples').value;scheduleAllSlider()};
+  $('allSamples').onchange=scheduleAllSlider;
+  $('allSeed').oninput=scheduleAllControl;
+  $('oneSamples').oninput=()=>{oneSamplesAutomatic=false;$('oneValue').textContent=$('oneSamples').value;scheduleOneSlider()};
+  $('oneSamples').onchange=scheduleOneSlider;
   $('oneZoom').oninput=()=>{
     $('oneZoomValue').textContent=`${oneZoomLevel().percent}%`;
-    if(oneSamplesAutomatic)fitOneDigitToViewport();else scheduleOne();
+    if(oneSamplesAutomatic)fitOneDigitToViewport(false);scheduleOneSlider();
   };
-  $('oneZoom').onchange=()=>{if(oneSamplesAutomatic)fitOneDigitToViewport();else scheduleOne.flush()};
-  $('oneSeed').oninput=scheduleOne;
-  bindSingleDigitInput($('oneDigit'),scheduleOne);
+  $('oneZoom').onchange=()=>{if(oneSamplesAutomatic)fitOneDigitToViewport(false);scheduleOneSlider()};
+  $('oneSeed').oninput=scheduleOneControl;
+  bindSingleDigitInput($('oneDigit'),scheduleOneControl);
   function addShiftWheelStepping(slider) {
     slider.addEventListener('wheel',event=>{
       if(!event.shiftKey)return; event.preventDefault();

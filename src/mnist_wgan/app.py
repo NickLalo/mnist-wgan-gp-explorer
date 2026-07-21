@@ -20,6 +20,8 @@ from mnist_wgan.visualize import (
     to_png_bytes,
 )
 
+MAX_SINGLE_DIGIT_SAMPLES = 10_000
+
 
 class InferenceEngine:
     def __init__(self, checkpoint_path: str | Path, device: str | None = None) -> None:
@@ -134,7 +136,7 @@ def create_app(
             "device": str(engine.device),
             "latent_dim": engine.latent_dim,
             "limits": {
-                "single_digit_samples": 5000,
+                "single_digit_samples": MAX_SINGLE_DIGIT_SAMPLES,
                 "latent_coordinate": 10.0,
             },
         }
@@ -148,7 +150,7 @@ def create_app(
     @app.get("/api/digit")
     def one_digit(
         digit: int = Query(3, ge=0, le=9),
-        samples: int = Query(240, ge=1, le=5000),
+        samples: int = Query(240, ge=1, le=MAX_SINGLE_DIGIT_SAMPLES),
         seed: int = Query(112, ge=0, le=2**31 - 1),
         scale: float = Query(2, ge=0.4, le=4),
     ) -> Response:

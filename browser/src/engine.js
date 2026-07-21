@@ -171,7 +171,7 @@ async function allDigits(parameters, signal) {
 
 async function oneDigit(parameters, signal) {
   const digit = integerParameter(parameters, 'digit', 0, 9);
-  const samples = integerParameter(parameters, 'samples', 1, 5000);
+  const samples = integerParameter(parameters, 'samples', 1, 10000);
   const seed = integerParameter(parameters, 'seed', 0, 2 ** 31 - 1);
   const scale = floatParameter(parameters, 'scale', 0.4, 4);
   const {images, settings} = await qualityGenerate([digit], samples, seed, signal);
