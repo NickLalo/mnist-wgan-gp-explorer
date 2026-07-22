@@ -13,6 +13,38 @@ DEFAULT_QUALITY_OVERSAMPLE = 1.20
 QUALITY_REJECTION_THRESHOLD = 0.15
 DETACHED_INK_THRESHOLD = 0.10
 UNSUPPORTED_INK_THRESHOLD = 0.03
+# Per-digit 99th percentiles from 800 deterministic training-set references.
+# Keeping the two coordinates separate matches the evaluation definition: a
+# sample is an excessive shade outlier when either centerline statistic crosses
+# the real-data envelope.
+STROKE_SHADE_CV_THRESHOLDS = (
+    0.18009305,
+    0.23450953,
+    0.17322524,
+    0.18218537,
+    0.17852868,
+    0.18906794,
+    0.19157907,
+    0.18149434,
+    0.18615095,
+    0.18855990,
+)
+STROKE_SHADE_DIP_THRESHOLDS = (
+    0.06730614,
+    0.08496279,
+    0.06908337,
+    0.07211228,
+    0.07053263,
+    0.07226840,
+    0.06812958,
+    0.07176431,
+    0.06746972,
+    0.07281310,
+)
+# Reject only the most severe shade discontinuities. Milder tail samples still
+# participate in rank scoring, which avoids sacrificing normal handwriting
+# variation merely to optimize one diagnostic.
+STROKE_SHADE_REJECTION_MULTIPLIER = 1.50
 
 
 def candidate_count(requested: int, oversample: float = DEFAULT_QUALITY_OVERSAMPLE) -> int:
@@ -66,6 +98,7 @@ def select_quality_samples(
     unsupported_batches = []
     disconnected_batches = []
     profile_batches = []
+    shade_batches = []
     logit_batches = []
     if model.perceptual_encoder is not None:
         model.perceptual_encoder.eval()
@@ -82,6 +115,7 @@ def select_quality_samples(
         unsupported_batches.append(unsupported)
         disconnected_batches.append(disconnected)
         profile_batches.append(model.stroke_profile_loss._statistics(image_batch))
+        shade_batches.append(model.stroke_shade_loss._statistics(image_batch))
         if model.perceptual_encoder is not None:
             logit_batches.append(model.perceptual_encoder(image_batch))
 
@@ -89,6 +123,7 @@ def select_quality_samples(
     unsupported = torch.cat(unsupported_batches)
     disconnected = torch.cat(disconnected_batches)
     profiles = torch.cat(profile_batches)
+    shade = torch.cat(shade_batches)
     logits = torch.cat(logit_batches) if logit_batches else None
     predicted = None
     if logits is not None:
@@ -101,16 +136,16 @@ def select_quality_samples(
         if len(indices) < keep_per_class:
             raise ValueError(f"digit {int(digit)} has fewer candidates than requested")
 
-        score = 0.30 * _quality_rank(critic_scores[indices])
+        score = 0.275 * _quality_rank(critic_scores[indices])
         if logits is not None:
             class_logits = logits[indices]
             requested_logits = class_logits[:, digit]
             alternatives = class_logits.clone()
             alternatives[:, digit] = -torch.inf
             margin = requested_logits - alternatives.max(dim=1).values
-            score = score + 0.45 * _quality_rank(margin)
+            score = score + 0.425 * _quality_rank(margin)
         else:
-            score = score + 0.45 * _quality_rank(critic_scores[indices])
+            score = score + 0.425 * _quality_rank(critic_scores[indices])
 
         class_profiles = profiles[indices]
         median = class_profiles.median(dim=0).values
@@ -120,6 +155,8 @@ def select_quality_samples(
         score = score + 0.10 * _quality_rank(profile_outlier, higher_is_better=False)
         score = score + 0.075 * _quality_rank(unsupported[indices], higher_is_better=False)
         score = score + 0.075 * _quality_rank(disconnected[indices], higher_is_better=False)
+        shade_level = shade[indices].sum(dim=1)
+        score = score + 0.05 * _quality_rank(shade_level, higher_is_better=False)
 
         base = indices[:keep_per_class]
         extras = indices[keep_per_class:]
@@ -129,6 +166,15 @@ def select_quality_samples(
         base_bad |= (
             (disconnected[base] > DETACHED_INK_THRESHOLD)
             & (unsupported[base] > UNSUPPORTED_INK_THRESHOLD)
+        )
+        shade_cv_threshold = (
+            STROKE_SHADE_CV_THRESHOLDS[int(digit)] * STROKE_SHADE_REJECTION_MULTIPLIER
+        )
+        shade_dip_threshold = (
+            STROKE_SHADE_DIP_THRESHOLDS[int(digit)] * STROKE_SHADE_REJECTION_MULTIPLIER
+        )
+        base_bad |= (shade[base, 0] > shade_cv_threshold) | (
+            shade[base, 1] > shade_dip_threshold
         )
         bad_local = torch.where(base_bad)[0]
         replace_count = min(len(bad_local), len(extras))

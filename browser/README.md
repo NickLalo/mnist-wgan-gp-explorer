@@ -1,10 +1,11 @@
 # Browser-only explorer
 
 This directory builds a static version of the MNIST WGAN-GP Explorer for GitHub Pages. The EMA
-generator and optional quality filter run with ONNX Runtime inside the visitor's browser. Firefox
-and mobile browsers use the generator output directly. This keeps Firefox responsive on its
-supported WebAssembly path and avoids loading a second model into memory on phones. Generated
-images, labels, seeds, and latent coordinates are never sent to an inference server.
+generator and quality scorer run with ONNX Runtime inside the visitor's browser. WebGPU browsers
+use the float32 graphs; Firefox and mobile browsers use static uint8 exports. The two compact CPU
+graphs are smaller together than the former float32 generator-only download, so every browser can
+use the critic, class margin, stroke checks, and shade-continuity evidence. Generated images,
+labels, seeds, and latent coordinates are never sent to an inference server.
 
 The browser application deliberately remains separate from the FastAPI application. During a
 build, `scripts/prepare-index.mjs` reuses the established HTML and CSS from
@@ -39,7 +40,8 @@ The committed ONNX files are deterministic exports of the bundled inference chec
 uv run --group browser-export python scripts/export_browser_models.py
 ```
 
-The exporter validates both graphs with ONNX Runtime and records model and checkpoint hashes in
+The exporter validates the float32 graphs, creates calibrated per-channel uint8 Conv/linear graphs
+for WebAssembly, checks their numeric error budgets, and records every model and checkpoint hash in
 `public/models/manifest.json`. Commit the refreshed model files and manifest together.
 
 Browser seeds are stable within this application, but its small JavaScript Gaussian generator is

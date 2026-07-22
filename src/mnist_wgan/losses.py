@@ -144,6 +144,25 @@ def _classwise_quantile_loss(real_values: Tensor, fake_values: Tensor, labels: T
     return torch.stack(losses).mean()
 
 
+def _classwise_upper_tail_excess_loss(
+    real_values: Tensor,
+    fake_values: Tensor,
+    labels: Tensor,
+    tail_fraction: float,
+) -> Tensor:
+    """Penalize only generated upper-tail statistics that exceed real data."""
+    if not 0.0 < tail_fraction <= 1.0:
+        raise ValueError("tail_fraction must be in (0, 1]")
+    losses = []
+    for digit in labels.unique():
+        mask = labels == digit
+        real_sorted = real_values[mask].detach().sort(dim=0).values
+        fake_sorted = fake_values[mask].sort(dim=0).values
+        tail_count = max(1, round(len(real_sorted) * tail_fraction))
+        losses.append(F.relu(fake_sorted[-tail_count:] - real_sorted[-tail_count:]).mean())
+    return torch.stack(losses).mean()
+
+
 def _soft_erode(images: Tensor) -> Tensor:
     return -F.max_pool2d(-images, kernel_size=3, stride=1, padding=1)
 
@@ -163,6 +182,70 @@ def _soft_skeleton(images: Tensor, iterations: int = 10) -> Tensor:
         delta = F.relu(working - _soft_open(working))
         skeleton = skeleton + F.relu(delta - skeleton * delta)
     return skeleton
+
+
+def stroke_shade_statistics(
+    images: Tensor,
+    *,
+    threshold: float = 0.16,
+    temperature: float = 0.025,
+    kernel_size: int = 3,
+    detach_geometry: bool = False,
+) -> Tensor:
+    """Measure low-frequency tone variation and shade dips along each stroke centerline."""
+    if kernel_size < 1 or kernel_size % 2 == 0:
+        raise ValueError("kernel_size must be a positive odd integer")
+    ink = images.float().add(1.0).mul(0.5).clamp(0.0, 1.0)
+    occupancy = torch.sigmoid((ink - threshold) / temperature)
+    geometry = occupancy.detach() if detach_geometry else occupancy
+    skeleton = _soft_skeleton(geometry)
+    padding = kernel_size // 2
+    local_mass = F.avg_pool2d(geometry, kernel_size, stride=1, padding=padding)
+    local_tone = F.avg_pool2d(
+        ink * geometry,
+        kernel_size,
+        stride=1,
+        padding=padding,
+    ) / local_mass.clamp_min(0.05)
+    skeleton_mass = skeleton.flatten(1).sum(dim=1).clamp_min(1e-4)
+    mean_tone = (local_tone * skeleton).flatten(1).sum(dim=1) / skeleton_mass
+    centered = local_tone - mean_tone[:, None, None, None]
+    shade_cv = (
+        (skeleton * centered.square()).flatten(1).sum(dim=1) / skeleton_mass + 1e-6
+    ).sqrt() / mean_tone.clamp_min(0.05)
+    shade_dip = (
+        (skeleton * F.relu(-centered)).flatten(1).sum(dim=1)
+        / skeleton_mass
+        / mean_tone.clamp_min(0.05)
+    )
+    return torch.stack((shade_cv, shade_dip), dim=1)
+
+
+class StrokeShadeLoss(nn.Module):
+    """Suppress only excessive low-frequency shade variation along generated strokes."""
+
+    def __init__(self, tail_fraction: float = 0.25) -> None:
+        super().__init__()
+        if not 0.0 < tail_fraction <= 1.0:
+            raise ValueError("tail_fraction must be in (0, 1]")
+        self.tail_fraction = tail_fraction
+
+    def _statistics(self, images: Tensor, *, detach_geometry: bool = False) -> Tensor:
+        return stroke_shade_statistics(images, detach_geometry=detach_geometry)
+
+    def forward(self, real: Tensor, fake: Tensor, labels: Tensor) -> Tensor:
+        # The forward value is unchanged, but this projects the shade-loss
+        # gradient onto zero-mean pixel adjustments for each image. Improving a
+        # pale stroke section should redistribute tone locally instead of
+        # solving the objective by darkening the whole digit.
+        fake_mean = fake.mean(dim=(1, 2, 3), keepdim=True)
+        mean_preserving_fake = fake - fake_mean + fake_mean.detach()
+        return _classwise_upper_tail_excess_loss(
+            self._statistics(real),
+            self._statistics(mean_preserving_fake, detach_geometry=True),
+            labels,
+            self.tail_fraction,
+        )
 
 
 class StrokeProfileLoss(nn.Module):

@@ -10,11 +10,11 @@ test.use({
   userAgent: iphone.userAgent,
 });
 
-test('uses the low-memory inference path on phones', async ({page}) => {
+test('uses compact generator and critic inference on phones', async ({page}) => {
   const modelRequests = [];
   const wasmRequests = [];
   let crashed = false;
-  await page.route('**/models/generator.onnx', async route => {
+  await page.route('**/models/generator-uint8.onnx', async route => {
     await new Promise(resolve => setTimeout(resolve, 1600));
     await route.continue();
   });
@@ -45,8 +45,8 @@ test('uses the low-memory inference path on phones', async ({page}) => {
   await expect.poll(() => page.locator('#allImage').evaluate(image => image.naturalWidth)).toBeGreaterThan(0);
 
   expect(await page.evaluate(() => navigator.userAgent)).toContain('iPhone');
-  expect(modelRequests.some(url => url.endsWith('/generator.onnx'))).toBe(true);
-  expect(modelRequests.some(url => url.endsWith('/quality-scorer.onnx'))).toBe(false);
+  expect(modelRequests.some(url => url.endsWith('/generator-uint8.onnx'))).toBe(true);
+  expect(modelRequests.some(url => url.endsWith('/quality-scorer-uint8.onnx'))).toBe(true);
   expect(wasmRequests).toHaveLength(1);
   expect(wasmRequests[0]).not.toContain('asyncify');
 

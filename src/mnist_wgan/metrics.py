@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets
 
 from mnist_wgan.classifier import MNISTClassifier, classifier_transform, ensure_classifier
+from mnist_wgan.losses import stroke_shade_statistics
 from mnist_wgan.module import ConditionalWGAN
 from mnist_wgan.paths import default_checkpoint_path
 from mnist_wgan.sampling import (
@@ -263,6 +264,55 @@ def stroke_integrity_metrics(
     }
 
 
+def stroke_shade_metrics(
+    reference_images: Tensor,
+    comparison_images: Tensor,
+    samples_per_digit: int,
+    *,
+    batch_size: int = 512,
+) -> dict[str, float | dict[str, float]]:
+    """Compare low-frequency centerline shade variation with real MNIST."""
+
+    def summarize(images: Tensor) -> np.ndarray:
+        batches = [
+            stroke_shade_statistics(images[start : start + batch_size]).detach().cpu()
+            for start in range(0, len(images), batch_size)
+        ]
+        return torch.cat(batches).numpy()
+
+    reference = summarize(reference_images)
+    comparison = summarize(comparison_images)
+    quantiles = np.linspace(0.01, 0.99, 99)
+    distance_by_digit: dict[str, float] = {}
+    tail_by_digit: dict[str, float] = {}
+    for digit in range(10):
+        section = slice(digit * samples_per_digit, (digit + 1) * samples_per_digit)
+        real_class, comparison_class = reference[section], comparison[section]
+        robust_scale = (
+            np.quantile(real_class, 0.75, axis=0)
+            - np.quantile(real_class, 0.25, axis=0)
+        ).clip(min=1e-3)
+        distance_by_digit[str(digit)] = float(
+            (
+                np.abs(
+                    np.quantile(comparison_class, quantiles, axis=0)
+                    - np.quantile(real_class, quantiles, axis=0)
+                )
+                / robust_scale
+            ).mean()
+        )
+        upper = np.quantile(real_class, 0.99, axis=0)
+        tail_by_digit[str(digit)] = float((comparison_class > upper).any(axis=1).mean())
+    return {
+        "stroke_shade_distance": float(np.mean(list(distance_by_digit.values()))),
+        "stroke_shade_tail_rate": float(np.mean(list(tail_by_digit.values()))),
+        "stroke_shade_cv": float(comparison[:, 0].mean()),
+        "stroke_shade_dip": float(comparison[:, 1].mean()),
+        "stroke_shade_distance_by_digit": distance_by_digit,
+        "stroke_shade_tail_rate_by_digit": tail_by_digit,
+    }
+
+
 def _worst_tail_indices(
     real_features: np.ndarray,
     comparison_features: np.ndarray,
@@ -407,11 +457,21 @@ def evaluate_checkpoint(
     generated_strokes = stroke_integrity_metrics(
         reference_images, generated_images, samples_per_digit
     )
+    calibration_shade = stroke_shade_metrics(
+        reference_images, calibration_images, samples_per_digit
+    )
+    generated_shade = stroke_shade_metrics(reference_images, generated_images, samples_per_digit)
     calibration.update(
         {name: value for name, value in calibration_strokes.items() if not isinstance(value, dict)}
     )
     generated.update(
         {name: value for name, value in generated_strokes.items() if not isinstance(value, dict)}
+    )
+    calibration.update(
+        {name: value for name, value in calibration_shade.items() if not isinstance(value, dict)}
+    )
+    generated.update(
+        {name: value for name, value in generated_shade.items() if not isinstance(value, dict)}
     )
     expected = labels.numpy()
     generated["conditional_accuracy"] = float((predictions == expected).mean())
@@ -457,6 +517,12 @@ def evaluate_checkpoint(
         "blob_stroke_rate_by_digit": generated_strokes["blob_stroke_rate_by_digit"],
         "thin_stroke_rate_by_digit": generated_strokes["thin_stroke_rate_by_digit"],
         "weak_stroke_rate_by_digit": generated_strokes["weak_stroke_rate_by_digit"],
+        "stroke_shade_distance_by_digit": generated_shade[
+            "stroke_shade_distance_by_digit"
+        ],
+        "stroke_shade_tail_rate_by_digit": generated_shade[
+            "stroke_shade_tail_rate_by_digit"
+        ],
         "samples_per_digit": samples_per_digit,
         "seed": seed,
         "checkpoint": str(checkpoint_path),

@@ -61,7 +61,7 @@ test('all three modes generate locally without API network traffic', async ({pag
   expect(dotAnimation.removingLast).toEqual([1, 1, 1, 1, 0]);
   expect(dotAnimation.removingPrevious).toEqual([1, 1, 1, 0, 0]);
   await expect(page.locator('#allStatus .slow-generation-note')).toHaveText(
-    "Hmm, that's weird. It loaded faster on my machine",
+    "don't worry, I'm 90% sure it is still processing",
     {timeout: 2700},
   );
   const allImage = await waitForGeneratedImage(page, '#allImage');

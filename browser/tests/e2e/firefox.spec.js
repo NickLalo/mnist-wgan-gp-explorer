@@ -1,6 +1,6 @@
 import {expect, test} from '@playwright/test';
 
-test('generates promptly without Firefox WebGPU or the slow quality pass', async ({page}) => {
+test('uses compact generator and critic inference without Firefox WebGPU', async ({page}) => {
   const modelRequests = [];
   const wasmRequests = [];
   const consoleErrors = [];
@@ -17,8 +17,8 @@ test('generates promptly without Firefox WebGPU or the slow quality pass', async
   await expect(page.locator('#allImage')).toHaveAttribute('src', /^blob:/);
   await expect.poll(() => page.locator('#allImage').evaluate(image => image.naturalWidth)).toBeGreaterThan(0);
 
-  expect(modelRequests.some(url => url.endsWith('/generator.onnx'))).toBe(true);
-  expect(modelRequests.some(url => url.endsWith('/quality-scorer.onnx'))).toBe(false);
+  expect(modelRequests.some(url => url.endsWith('/generator-uint8.onnx'))).toBe(true);
+  expect(modelRequests.some(url => url.endsWith('/quality-scorer-uint8.onnx'))).toBe(true);
   expect(wasmRequests).toHaveLength(1);
   expect(wasmRequests[0]).not.toContain('asyncify');
   expect(consoleErrors).toEqual([]);

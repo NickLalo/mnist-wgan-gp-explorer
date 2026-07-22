@@ -312,7 +312,7 @@
     slowStatusTimers.set(img,setTimeout(()=>{
       if(!status.classList.contains('generating'))return;
       const note=document.createElement('span');note.className='slow-generation-note';
-      note.textContent="Hmm, that's weird. It loaded faster on my machine";status.append(note);
+      note.textContent="don't worry, I'm 90% sure it is still processing";status.append(note);
       status.setAttribute('aria-label',`Generating numbers. ${note.textContent}`);slowStatusTimers.delete(img);
     },2000));
   }

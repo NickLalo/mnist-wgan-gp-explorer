@@ -7,8 +7,7 @@ const assetPath = path => `${import.meta.env.BASE_URL}${path}`;
 const isFirefox = navigator.userAgent.includes('Firefox/');
 const isMobile = navigator.userAgentData?.mobile === true
   || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-const useLightweightGeneration = isFirefox || isMobile;
-const useWebGpu = Boolean(navigator.gpu) && !useLightweightGeneration;
+const useWebGpu = Boolean(navigator.gpu) && !isFirefox && !isMobile;
 const runtimePromise = (
   useWebGpu ? import('onnxruntime-web/webgpu') : import('onnxruntime-web/wasm')
 ).then(runtime => {
@@ -48,16 +47,20 @@ async function createSession(modelPath) {
   }
 }
 
+function modelPath(model) {
+  return useWebGpu ? model.path : (model.wasm_path ?? model.path);
+}
+
 async function generatorSession() {
   if (!generatorPromise) {
-    generatorPromise = manifest().then(data => createSession(data.models.generator.path));
+    generatorPromise = manifest().then(data => createSession(modelPath(data.models.generator)));
   }
   return generatorPromise;
 }
 
 async function scorerSession() {
   if (!scorerPromise) {
-    scorerPromise = manifest().then(data => createSession(data.models.quality_scorer.path));
+    scorerPromise = manifest().then(data => createSession(modelPath(data.models.quality_scorer)));
   }
   return scorerPromise;
 }
@@ -99,6 +102,7 @@ async function score(images, labels, signal) {
     unsupported: new Float32Array(labels.length),
     disconnected: new Float32Array(labels.length),
     profiles: new Float32Array(labels.length * 4),
+    shade: new Float32Array(labels.length * 2),
   };
   const batchSize = 256;
   for (let start = 0; start < labels.length; start += batchSize) {
@@ -113,6 +117,7 @@ async function score(images, labels, signal) {
     outputs.unsupported.set(result.unsupported.data, start);
     outputs.disconnected.set(result.disconnected.data, start);
     outputs.profiles.set(result.profiles.data, start * 4);
+    outputs.shade.set(result.shade.data, start * 2);
     await new Promise(resolve => setTimeout(resolve, 0));
   }
   return outputs;
@@ -120,16 +125,13 @@ async function score(images, labels, signal) {
 
 async function qualityGenerate(classes, requestedPerClass, seed, signal) {
   const settings = await manifest();
-  // ONNX Runtime does not support its WebGPU provider in Firefox, where the
-  // optional WASM quality pass is much slower than generation itself. Mobile
-  // browsers also avoid the second model and JSEP runtime to limit memory use.
-  const perClass = useLightweightGeneration
-    ? requestedPerClass
-    : candidateCount(requestedPerClass, settings.sampling.quality_oversample);
+  // CPU-only browsers use compact uint8 graphs. Their combined generator and
+  // critic download is smaller than the old generator-only float32 path, so
+  // phones and Firefox can now run the same selective quality pass as WebGPU.
+  const perClass = candidateCount(requestedPerClass, settings.sampling.quality_oversample);
   const labels = classes.flatMap(digit => Array(perClass).fill(digit));
   const noise = gaussianNoise(labels.length, settings.latent_dim, seed);
   const candidates = await generate(noise, labels, settings.latent_dim, signal);
-  if (useLightweightGeneration) return {images: candidates, settings};
   const scoring = await score(candidates, labels, signal);
   const selected = selectQualityIndices({
     labels,
@@ -138,6 +140,9 @@ async function qualityGenerate(classes, requestedPerClass, seed, signal) {
     rejectionThreshold: settings.sampling.quality_rejection_threshold,
     detachedInkThreshold: settings.sampling.detached_ink_threshold,
     unsupportedInkThreshold: settings.sampling.unsupported_ink_threshold,
+    strokeShadeCvThresholds: settings.sampling.stroke_shade_cv_thresholds,
+    strokeShadeDipThresholds: settings.sampling.stroke_shade_dip_thresholds,
+    strokeShadeRejectionMultiplier: settings.sampling.stroke_shade_rejection_multiplier,
   });
   const images = new Float32Array(selected.length * 28 * 28);
   selected.forEach((candidate, outputIndex) => {
