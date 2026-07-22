@@ -22,6 +22,33 @@ test('an explicit class failure is replaced by the best backup candidate', () =>
     unsupported: new Float32Array(3),
     disconnected: new Float32Array(3),
     profiles: new Float32Array(12),
+    shade: new Float32Array(6),
+    strokeShadeCvThresholds: Array(10).fill(1),
+    strokeShadeDipThresholds: Array(10).fill(1),
+  });
+  assert.deepEqual(selected, [1, 2]);
+});
+
+test('an excessive centerline shade dip is replaced by a backup candidate', () => {
+  const labels = [2, 2, 2];
+  const logits = new Float32Array(30);
+  logits[2] = 10;
+  logits[12] = 10;
+  logits[22] = 10;
+  const shade = new Float32Array(6);
+  shade[1] = 0.2;
+  const selected = selectQualityIndices({
+    labels,
+    keepPerClass: 2,
+    criticScores: new Float32Array([2, 1, 0]),
+    logits,
+    unsupported: new Float32Array(3),
+    disconnected: new Float32Array(3),
+    profiles: new Float32Array(12),
+    shade,
+    strokeShadeCvThresholds: Array(10).fill(1),
+    strokeShadeDipThresholds: Array(10).fill(0.1),
+    strokeShadeRejectionMultiplier: 1,
   });
   assert.deepEqual(selected, [1, 2]);
 });

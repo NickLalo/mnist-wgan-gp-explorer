@@ -4,6 +4,7 @@ from mnist_wgan.losses import (
     BatchStructureLoss,
     StrokeIntegrityLoss,
     StrokeProfileLoss,
+    StrokeShadeLoss,
     diversity_matching_loss,
     gradient_penalty,
     mode_seeking_loss,
@@ -38,6 +39,7 @@ def test_regularizers_are_finite_and_differentiable():
     histogram, edge, detail, variance = BatchStructureLoss()(real, fake, labels)
     ink, support, footprint, connectivity = StrokeIntegrityLoss()(real, fake, labels)
     stroke_profile = StrokeProfileLoss()(real, fake, labels)
+    stroke_shade = StrokeShadeLoss()(real, fake, labels)
     second = torch.randn_like(fake).tanh()
     diversity = mode_seeking_loss(fake, second, torch.randn(4, 16), torch.randn(4, 16))
     diversity_match, _, _ = diversity_matching_loss(real, fake, second, labels)
@@ -60,6 +62,7 @@ def test_regularizers_are_finite_and_differentiable():
         + footprint
         + connectivity
         + stroke_profile
+        + stroke_shade
         + diversity_match
         - 0.1 * diversity
     )
@@ -81,6 +84,7 @@ def test_regularizers_are_finite_and_differentiable():
             footprint,
             connectivity,
             stroke_profile,
+            stroke_shade,
         )
     )
     total.backward()
@@ -99,5 +103,20 @@ def test_quality_sampler_keeps_balanced_classes_in_original_order():
     )
     assert selected.shape == (8, 1, 28, 28)
     assert scores.shape == (8,)
+
+
+def test_stroke_shade_gradient_preserves_each_images_mean_tone():
+    torch.manual_seed(9)
+    real = torch.rand(4, 1, 28, 28).mul(2).sub(1)
+    fake = torch.rand(4, 1, 28, 28).mul(2).sub(1).requires_grad_(True)
+    labels = torch.tensor([0, 0, 1, 1])
+    StrokeShadeLoss()(real, fake, labels).backward()
+    gradient_means = fake.grad.flatten(1).mean(dim=1)
+    torch.testing.assert_close(
+        gradient_means,
+        torch.zeros_like(gradient_means),
+        atol=1e-8,
+        rtol=0,
+    )
     assert candidate_count(10) == 14
     assert candidate_count(100) == 120

@@ -5,6 +5,7 @@ from mnist_wgan.metrics import (
     frechet_distance,
     precision_recall_density_coverage,
     stroke_integrity_metrics,
+    stroke_shade_metrics,
 )
 
 
@@ -38,3 +39,14 @@ def test_stroke_profiles_detect_blobs_and_weak_lines():
     metrics = stroke_integrity_metrics(reference, comparison, samples_per_digit=1)
     assert metrics["blob_stroke_rate_by_digit"]["0"] == 1.0
     assert metrics["weak_stroke_rate_by_digit"]["1"] == 1.0
+
+
+def test_stroke_shade_metrics_detect_an_extended_pale_section():
+    reference = torch.full((10, 1, 28, 28), -1.0)
+    reference[:, :, 5:23, 12:16] = 1.0
+    comparison = reference.clone()
+    comparison[0, :, 14:23, 12:16] = -0.4
+    metrics = stroke_shade_metrics(reference, comparison, samples_per_digit=1)
+    assert metrics["stroke_shade_tail_rate"] == 0.1
+    assert metrics["stroke_shade_tail_rate_by_digit"]["0"] == 1.0
+    assert metrics["stroke_shade_distance"] > 0

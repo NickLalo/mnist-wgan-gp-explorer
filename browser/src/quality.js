@@ -35,9 +35,13 @@ export function selectQualityIndices({
   unsupported,
   disconnected,
   profiles,
+  shade,
   rejectionThreshold = 0.15,
   detachedInkThreshold = 0.1,
   unsupportedInkThreshold = 0.03,
+  strokeShadeCvThresholds,
+  strokeShadeDipThresholds,
+  strokeShadeRejectionMultiplier = 1.5,
 }) {
   const digits = [...new Set(labels)].sort((left, right) => left - right);
   const selected = [];
@@ -79,13 +83,18 @@ export function selectQualityIndices({
     const profileRanks = qualityRanks(outliers, false);
     const unsupportedRanks = qualityRanks(slice1d(unsupported, indices), false);
     const disconnectedRanks = qualityRanks(slice1d(disconnected, indices), false);
+    const shadeRanks = qualityRanks(
+      indices.map(index => shade[index * 2] + shade[index * 2 + 1]),
+      false,
+    );
 
     for (let local = 0; local < indices.length; local += 1) {
-      scores[local] = 0.30 * criticRanks[local]
-        + 0.45 * marginRanks[local]
+      scores[local] = 0.275 * criticRanks[local]
+        + 0.425 * marginRanks[local]
         + 0.10 * profileRanks[local]
         + 0.075 * unsupportedRanks[local]
-        + 0.075 * disconnectedRanks[local];
+        + 0.075 * disconnectedRanks[local]
+        + 0.05 * shadeRanks[local];
     }
 
     const rejected = [];
@@ -97,7 +106,13 @@ export function selectQualityIndices({
       }
       const artifact = disconnected[index] > detachedInkThreshold
         && unsupported[index] > unsupportedInkThreshold;
-      if (scores[local] < rejectionThreshold || predicted !== digit || artifact) rejected.push(local);
+      const shadeOutlier = shade[index * 2]
+          > strokeShadeCvThresholds[digit] * strokeShadeRejectionMultiplier
+        || shade[index * 2 + 1]
+          > strokeShadeDipThresholds[digit] * strokeShadeRejectionMultiplier;
+      if (scores[local] < rejectionThreshold || predicted !== digit || artifact || shadeOutlier) {
+        rejected.push(local);
+      }
     }
 
     const replaceCount = Math.min(rejected.length, indices.length - keepPerClass);
