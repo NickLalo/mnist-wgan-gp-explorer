@@ -26,6 +26,7 @@ from mnist_wgan.sampling import (
     DEFAULT_QUALITY_OVERSAMPLE,
     DETACHED_INK_THRESHOLD,
     QUALITY_REJECTION_THRESHOLD,
+    STROKE_HALO_THRESHOLDS,
     STROKE_SHADE_CV_THRESHOLDS,
     STROKE_SHADE_DIP_THRESHOLDS,
     STROKE_SHADE_REJECTION_MULTIPLIER,
@@ -72,6 +73,7 @@ class BrowserQualityScorer(nn.Module):
         self.stroke_loss = model.stroke_loss
         self.stroke_profile_loss = model.stroke_profile_loss
         self.stroke_shade_loss = model.stroke_shade_loss
+        self.stroke_halo_loss = model.stroke_halo_loss
 
     def forward(self, images: Tensor, label_one_hot: Tensor) -> tuple[Tensor, ...]:
         critic_features = self.critic.features(images)
@@ -82,7 +84,8 @@ class BrowserQualityScorer(nn.Module):
         _, unsupported, _, disconnected = self.stroke_loss._statistics(images)
         profiles = self.stroke_profile_loss._statistics(images)
         shade = self.stroke_shade_loss._statistics(images)
-        return critic_scores, logits, unsupported, disconnected, profiles, shade
+        halo = self.stroke_halo_loss._statistics(images)
+        return critic_scores, logits, unsupported, disconnected, profiles, shade, halo
 
 
 def _sha256(path: Path) -> str:
@@ -149,6 +152,8 @@ def _quantize_uint8(
     source: Path,
     destination: Path,
     calibration_rows: list[dict[str, np.ndarray]],
+    *,
+    nodes_to_exclude: list[str] | None = None,
 ) -> None:
     """Create the WASM-oriented static uint8 graph recommended for browser CPUs."""
     quantize_static(
@@ -159,6 +164,7 @@ def _quantize_uint8(
         activation_type=QuantType.QUInt8,
         weight_type=QuantType.QUInt8,
         op_types_to_quantize=["Conv", "Gemm", "MatMul"],
+        nodes_to_exclude=nodes_to_exclude or [],
         per_channel=True,
     )
     onnx.checker.check_model(onnx.load(destination))
@@ -257,6 +263,7 @@ def export_browser_models(checkpoint: Path, output_dir: Path, *, verify: bool = 
         "disconnected",
         "profiles",
         "shade",
+        "halo",
     ]
     scorer_path = output_dir / "quality-scorer.onnx"
     _export(
@@ -291,7 +298,22 @@ def export_browser_models(checkpoint: Path, output_dir: Path, *, verify: bool = 
     quantized_generator_path = output_dir / "generator-uint8.onnx"
     quantized_scorer_path = output_dir / "quality-scorer-uint8.onnx"
     _quantize_uint8(generator_path, quantized_generator_path, calibration_generator_rows)
-    _quantize_uint8(scorer_path, quantized_scorer_path, calibration_scorer_rows)
+    # The critic's final residual block, scalar score, and conditional label
+    # projection are rank-sensitive. Keep that small tail in float while
+    # quantizing the earlier convolutional bulk and classifier that dominate
+    # size and runtime.
+    _quantize_uint8(
+        scorer_path,
+        quantized_scorer_path,
+        calibration_scorer_rows,
+        nodes_to_exclude=[
+            "node_conv2d_7",
+            "node_conv2d_8",
+            "node_conv2d_9",
+            "node_linear",
+            "node_matmul",
+        ],
+    )
 
     verification: dict[str, dict[str, float]] = {}
     if verify:
@@ -322,11 +344,14 @@ def export_browser_models(checkpoint: Path, output_dir: Path, *, verify: bool = 
             raise AssertionError("quantized generator exceeded the 0.015 mean-error budget")
         if verification["quality_scorer_uint8"]["logits"]["mean_absolute_error"] > 0.20:
             raise AssertionError("quantized quality scorer exceeded the 0.20 logit-error budget")
-        if (
-            verification["quality_scorer_uint8_agreement"]["critic_rank_correlation"]
-            < 0.98
-        ):
-            raise AssertionError("quantized critic rank correlation fell below 0.98")
+        critic_rank_correlation = verification["quality_scorer_uint8_agreement"][
+            "critic_rank_correlation"
+        ]
+        if critic_rank_correlation < 0.98:
+            raise AssertionError(
+                "quantized critic rank correlation fell below 0.98: "
+                f"{critic_rank_correlation:.6f}"
+            )
         if verification["quality_scorer_uint8_agreement"]["classifier_agreement"] < 0.995:
             raise AssertionError("quantized classifier agreement fell below 99.5%")
 
@@ -361,6 +386,7 @@ def export_browser_models(checkpoint: Path, output_dir: Path, *, verify: bool = 
             "stroke_shade_cv_thresholds": STROKE_SHADE_CV_THRESHOLDS,
             "stroke_shade_dip_thresholds": STROKE_SHADE_DIP_THRESHOLDS,
             "stroke_shade_rejection_multiplier": STROKE_SHADE_REJECTION_MULTIPLIER,
+            "stroke_halo_thresholds": STROKE_HALO_THRESHOLDS,
         },
         "rendering": {"paper_color": PAPER_COLOR, "ink_color": INK_COLOR},
         "wasm_quantization": {
@@ -368,6 +394,14 @@ def export_browser_models(checkpoint: Path, output_dir: Path, *, verify: bool = 
             "activations": "uint8",
             "weights": "uint8",
             "per_channel": True,
+            "quality_scorer_mode": "hybrid_uint8_float32",
+            "quality_scorer_float_nodes": [
+                "node_conv2d_7",
+                "node_conv2d_8",
+                "node_conv2d_9",
+                "node_linear",
+                "node_matmul",
+            ],
         },
         "verification_max_absolute_error": verification,
     }

@@ -23,6 +23,7 @@ from mnist_wgan.paths import default_checkpoint_path
 from mnist_wgan.sampling import (
     DETACHED_INK_THRESHOLD,
     QUALITY_REJECTION_THRESHOLD,
+    STROKE_HALO_THRESHOLDS,
     UNSUPPORTED_INK_THRESHOLD,
     candidate_count,
     select_quality_samples,
@@ -313,6 +314,61 @@ def stroke_shade_metrics(
     }
 
 
+def stroke_halo_metrics(
+    reference_images: Tensor,
+    comparison_images: Tensor,
+    samples_per_digit: int,
+    *,
+    low_threshold: float = 0.05,
+    core_threshold: float = 0.55,
+) -> dict[str, float | dict[str, float]]:
+    """Measure pale outer-ring ink beyond normal one-pixel antialiasing."""
+
+    def summarize(images: Tensor) -> np.ndarray:
+        ink = images.detach().float().add(1).mul(0.5).clamp(0, 1)
+        core = (ink >= core_threshold).float()
+        immediate = F.max_pool2d(core, kernel_size=3, stride=1, padding=1) > 0
+        extended = F.max_pool2d(core, kernel_size=5, stride=1, padding=2) > 0
+        soft = (ink >= low_threshold) & (ink < core_threshold)
+        halo_mass = (ink * soft * (extended & ~immediate)).flatten(1).sum(dim=1)
+        total_ink = ink.flatten(1).sum(dim=1).clamp_min(1)
+        return (halo_mass / total_ink).cpu().numpy()
+
+    reference = summarize(reference_images)
+    comparison = summarize(comparison_images)
+    quantiles = np.linspace(0.01, 0.99, 99)
+    distance_by_digit: dict[str, float] = {}
+    tail_by_digit: dict[str, float] = {}
+    rate_by_digit: dict[str, float] = {}
+    severe_by_digit: dict[str, float] = {}
+    for digit in range(10):
+        section = slice(digit * samples_per_digit, (digit + 1) * samples_per_digit)
+        real_class, comparison_class = reference[section], comparison[section]
+        scale = max(float(np.quantile(real_class, 0.99)), 1e-3)
+        distance_by_digit[str(digit)] = float(
+            np.abs(
+                np.quantile(comparison_class, quantiles)
+                - np.quantile(real_class, quantiles)
+            ).mean()
+            / scale
+        )
+        upper = float(np.quantile(real_class, 0.99))
+        tail_by_digit[str(digit)] = float((comparison_class > upper).mean())
+        rate_by_digit[str(digit)] = float((comparison_class > 0.001).mean())
+        severe_by_digit[str(digit)] = float((comparison_class > 0.005).mean())
+    return {
+        "stroke_halo_distance": float(np.mean(list(distance_by_digit.values()))),
+        "stroke_halo_tail_rate": float(np.mean(list(tail_by_digit.values()))),
+        "stroke_halo_rate": float((comparison > 0.001).mean()),
+        "stroke_halo_severe_rate": float((comparison > 0.005).mean()),
+        "stroke_halo_mean": float(comparison.mean()),
+        "stroke_halo_distance_by_digit": distance_by_digit,
+        "stroke_halo_tail_rate_by_digit": tail_by_digit,
+        "stroke_halo_rate_by_digit": rate_by_digit,
+        "stroke_halo_severe_rate_by_digit": severe_by_digit,
+    }
+
+
 def _worst_tail_indices(
     real_features: np.ndarray,
     comparison_features: np.ndarray,
@@ -461,6 +517,10 @@ def evaluate_checkpoint(
         reference_images, calibration_images, samples_per_digit
     )
     generated_shade = stroke_shade_metrics(reference_images, generated_images, samples_per_digit)
+    calibration_halo = stroke_halo_metrics(
+        reference_images, calibration_images, samples_per_digit
+    )
+    generated_halo = stroke_halo_metrics(reference_images, generated_images, samples_per_digit)
     calibration.update(
         {name: value for name, value in calibration_strokes.items() if not isinstance(value, dict)}
     )
@@ -472,6 +532,12 @@ def evaluate_checkpoint(
     )
     generated.update(
         {name: value for name, value in generated_shade.items() if not isinstance(value, dict)}
+    )
+    calibration.update(
+        {name: value for name, value in calibration_halo.items() if not isinstance(value, dict)}
+    )
+    generated.update(
+        {name: value for name, value in generated_halo.items() if not isinstance(value, dict)}
     )
     expected = labels.numpy()
     generated["conditional_accuracy"] = float((predictions == expected).mean())
@@ -523,6 +589,14 @@ def evaluate_checkpoint(
         "stroke_shade_tail_rate_by_digit": generated_shade[
             "stroke_shade_tail_rate_by_digit"
         ],
+        "stroke_halo_distance_by_digit": generated_halo["stroke_halo_distance_by_digit"],
+        "stroke_halo_tail_rate_by_digit": generated_halo[
+            "stroke_halo_tail_rate_by_digit"
+        ],
+        "stroke_halo_rate_by_digit": generated_halo["stroke_halo_rate_by_digit"],
+        "stroke_halo_severe_rate_by_digit": generated_halo[
+            "stroke_halo_severe_rate_by_digit"
+        ],
         "samples_per_digit": samples_per_digit,
         "seed": seed,
         "checkpoint": str(checkpoint_path),
@@ -534,6 +608,7 @@ def evaluate_checkpoint(
                 "score_threshold": QUALITY_REJECTION_THRESHOLD,
                 "detached_ink_threshold": DETACHED_INK_THRESHOLD,
                 "unsupported_ink_threshold": UNSUPPORTED_INK_THRESHOLD,
+                "stroke_halo_thresholds": STROKE_HALO_THRESHOLDS,
             }
             if quality_oversample > 1.0
             else None

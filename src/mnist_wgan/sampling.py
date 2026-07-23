@@ -45,6 +45,22 @@ STROKE_SHADE_DIP_THRESHOLDS = (
 # participate in rank scoring, which avoids sacrificing normal handwriting
 # variation merely to optimize one diagnostic.
 STROKE_SHADE_REJECTION_MULTIPLIER = 1.50
+# Per-digit 98th percentiles of the differentiable outer-halo statistic over
+# all 60,000 MNIST training images. The UI has 20% candidate headroom, so this
+# real-data boundary can reject connected pale fringe ink without narrowing the
+# accepted handwriting distribution beyond what MNIST itself contains.
+STROKE_HALO_THRESHOLDS = (
+    0.00209862,
+    0.00201130,
+    0.00284524,
+    0.00303381,
+    0.00358886,
+    0.00516698,
+    0.00189773,
+    0.00210592,
+    0.00305785,
+    0.00392174,
+)
 
 
 def candidate_count(requested: int, oversample: float = DEFAULT_QUALITY_OVERSAMPLE) -> int:
@@ -76,13 +92,15 @@ def select_quality_samples(
     """Replace only clear failures with higher-quality backup candidates.
 
     The score combines requested-class margin, conditional critic score, soft
-    stroke-profile centrality, unsupported ink, and disconnected ink. The first
+    stroke-profile centrality, unsupported ink, disconnected ink, and outer
+    halo mass. The first
     ``keep_per_class`` samples remain untouched unless they fall below an
     absolute low-quality threshold, are classified as the wrong digit, or have
     a small detached component with little local support. The explicit artifact
     check catches isolated flecks that can otherwise hide beside an excellent
-    main stroke. This avoids the diversity loss caused by retaining a fixed top
-    percentage.
+    main stroke. A class-calibrated halo boundary catches connected pale fringe
+    ink that local-support checks miss. This avoids the diversity loss caused by
+    retaining a fixed top percentage.
     """
     if len(images) != len(labels):
         raise ValueError("images and labels must have the same length")
@@ -99,6 +117,7 @@ def select_quality_samples(
     disconnected_batches = []
     profile_batches = []
     shade_batches = []
+    halo_batches = []
     logit_batches = []
     if model.perceptual_encoder is not None:
         model.perceptual_encoder.eval()
@@ -116,6 +135,7 @@ def select_quality_samples(
         disconnected_batches.append(disconnected)
         profile_batches.append(model.stroke_profile_loss._statistics(image_batch))
         shade_batches.append(model.stroke_shade_loss._statistics(image_batch))
+        halo_batches.append(model.stroke_halo_loss._statistics(image_batch))
         if model.perceptual_encoder is not None:
             logit_batches.append(model.perceptual_encoder(image_batch))
 
@@ -124,6 +144,7 @@ def select_quality_samples(
     disconnected = torch.cat(disconnected_batches)
     profiles = torch.cat(profile_batches)
     shade = torch.cat(shade_batches)
+    halo = torch.cat(halo_batches)
     logits = torch.cat(logit_batches) if logit_batches else None
     predicted = None
     if logits is not None:
@@ -136,16 +157,16 @@ def select_quality_samples(
         if len(indices) < keep_per_class:
             raise ValueError(f"digit {int(digit)} has fewer candidates than requested")
 
-        score = 0.275 * _quality_rank(critic_scores[indices])
+        score = 0.25 * _quality_rank(critic_scores[indices])
         if logits is not None:
             class_logits = logits[indices]
             requested_logits = class_logits[:, digit]
             alternatives = class_logits.clone()
             alternatives[:, digit] = -torch.inf
             margin = requested_logits - alternatives.max(dim=1).values
-            score = score + 0.425 * _quality_rank(margin)
+            score = score + 0.40 * _quality_rank(margin)
         else:
-            score = score + 0.425 * _quality_rank(critic_scores[indices])
+            score = score + 0.40 * _quality_rank(critic_scores[indices])
 
         class_profiles = profiles[indices]
         median = class_profiles.median(dim=0).values
@@ -157,6 +178,7 @@ def select_quality_samples(
         score = score + 0.075 * _quality_rank(disconnected[indices], higher_is_better=False)
         shade_level = shade[indices].sum(dim=1)
         score = score + 0.05 * _quality_rank(shade_level, higher_is_better=False)
+        score = score + 0.05 * _quality_rank(halo[indices], higher_is_better=False)
 
         base = indices[:keep_per_class]
         extras = indices[keep_per_class:]
@@ -176,6 +198,7 @@ def select_quality_samples(
         base_bad |= (shade[base, 0] > shade_cv_threshold) | (
             shade[base, 1] > shade_dip_threshold
         )
+        base_bad |= halo[base] > STROKE_HALO_THRESHOLDS[int(digit)]
         bad_local = torch.where(base_bad)[0]
         replace_count = min(len(bad_local), len(extras))
         if replace_count:

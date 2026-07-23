@@ -12,6 +12,7 @@ from torch.nn import functional as F
 from mnist_wgan.classifier import MNISTClassifier
 from mnist_wgan.losses import (
     BatchStructureLoss,
+    StrokeHaloLoss,
     StrokeIntegrityLoss,
     StrokeProfileLoss,
     StrokeShadeLoss,
@@ -58,6 +59,8 @@ class ConditionalWGAN(L.LightningModule):
         stroke_profile_weight: float = 10.0,
         stroke_shade_weight: float = 0.0,
         stroke_shade_tail_fraction: float = 0.25,
+        stroke_halo_weight: float = 0.0,
+        stroke_halo_tail_fraction: float = 0.50,
         ema_decay: float = 0.995,
     ) -> None:
         super().__init__()
@@ -74,6 +77,7 @@ class ConditionalWGAN(L.LightningModule):
         self.stroke_loss = StrokeIntegrityLoss()
         self.stroke_profile_loss = StrokeProfileLoss()
         self.stroke_shade_loss = StrokeShadeLoss(stroke_shade_tail_fraction)
+        self.stroke_halo_loss = StrokeHaloLoss(stroke_halo_tail_fraction)
         self.perceptual_encoder = (
             MNISTClassifier().requires_grad_(False)
             if perceptual_distribution_weight > 0 or perceptual_tail_weight > 0
@@ -177,6 +181,7 @@ class ConditionalWGAN(L.LightningModule):
         )
         stroke_profile = self.stroke_profile_loss(real, fake_first, labels)
         stroke_shade = self.stroke_shade_loss(real, fake_first, labels)
+        stroke_halo = self.stroke_halo_loss(real, fake_first, labels)
         real_features = self.critic.features(real).detach()
         fake_features = self.critic.features(fake_first)
         feature_distribution = sliced_feature_distance(real_features, fake_features, labels)
@@ -219,6 +224,7 @@ class ConditionalWGAN(L.LightningModule):
             + self.hparams.connectivity_weight * connectivity
             + distribution_scale * self.hparams.stroke_profile_weight * stroke_profile
             + distribution_scale * self.hparams.stroke_shade_weight * stroke_shade
+            + distribution_scale * self.hparams.stroke_halo_weight * stroke_halo
             + diversity_weight * diversity
         )
         generator_optimizer.zero_grad(set_to_none=True)
@@ -252,6 +258,7 @@ class ConditionalWGAN(L.LightningModule):
             "train/connectivity": connectivity.detach(),
             "train/stroke_profile": stroke_profile.detach(),
             "train/stroke_shade": stroke_shade.detach(),
+            "train/stroke_halo": stroke_halo.detach(),
             "train/distribution_scale": torch.tensor(distribution_scale, device=self.device),
         }
         self.log_dict(metrics, on_step=True, on_epoch=True, prog_bar=False, batch_size=batch_size)

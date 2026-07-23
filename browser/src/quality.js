@@ -36,12 +36,14 @@ export function selectQualityIndices({
   disconnected,
   profiles,
   shade,
+  halo,
   rejectionThreshold = 0.15,
   detachedInkThreshold = 0.1,
   unsupportedInkThreshold = 0.03,
   strokeShadeCvThresholds,
   strokeShadeDipThresholds,
   strokeShadeRejectionMultiplier = 1.5,
+  strokeHaloThresholds,
 }) {
   const digits = [...new Set(labels)].sort((left, right) => left - right);
   const selected = [];
@@ -87,14 +89,16 @@ export function selectQualityIndices({
       indices.map(index => shade[index * 2] + shade[index * 2 + 1]),
       false,
     );
+    const haloRanks = qualityRanks(slice1d(halo, indices), false);
 
     for (let local = 0; local < indices.length; local += 1) {
-      scores[local] = 0.275 * criticRanks[local]
-        + 0.425 * marginRanks[local]
+      scores[local] = 0.25 * criticRanks[local]
+        + 0.40 * marginRanks[local]
         + 0.10 * profileRanks[local]
         + 0.075 * unsupportedRanks[local]
         + 0.075 * disconnectedRanks[local]
-        + 0.05 * shadeRanks[local];
+        + 0.05 * shadeRanks[local]
+        + 0.05 * haloRanks[local];
     }
 
     const rejected = [];
@@ -110,7 +114,14 @@ export function selectQualityIndices({
           > strokeShadeCvThresholds[digit] * strokeShadeRejectionMultiplier
         || shade[index * 2 + 1]
           > strokeShadeDipThresholds[digit] * strokeShadeRejectionMultiplier;
-      if (scores[local] < rejectionThreshold || predicted !== digit || artifact || shadeOutlier) {
+      const haloOutlier = halo[index] > strokeHaloThresholds[digit];
+      if (
+        scores[local] < rejectionThreshold
+        || predicted !== digit
+        || artifact
+        || shadeOutlier
+        || haloOutlier
+      ) {
         rejected.push(local);
       }
     }

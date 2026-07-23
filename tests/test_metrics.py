@@ -4,6 +4,7 @@ import torch
 from mnist_wgan.metrics import (
     frechet_distance,
     precision_recall_density_coverage,
+    stroke_halo_metrics,
     stroke_integrity_metrics,
     stroke_shade_metrics,
 )
@@ -50,3 +51,14 @@ def test_stroke_shade_metrics_detect_an_extended_pale_section():
     assert metrics["stroke_shade_tail_rate"] == 0.1
     assert metrics["stroke_shade_tail_rate_by_digit"]["0"] == 1.0
     assert metrics["stroke_shade_distance"] > 0
+
+
+def test_stroke_halo_metrics_detect_pale_ink_beyond_the_supported_edge():
+    reference = torch.full((10, 1, 28, 28), -1.0)
+    reference[:, :, 6:22, 13:16] = 1.0
+    comparison = reference.clone()
+    comparison[0, :, 6:22, 11] = -0.4
+    metrics = stroke_halo_metrics(reference, comparison, samples_per_digit=1)
+    assert metrics["stroke_halo_rate"] == 0.1
+    assert metrics["stroke_halo_tail_rate_by_digit"]["0"] == 1.0
+    assert metrics["stroke_halo_distance"] > 0
