@@ -103,6 +103,7 @@ async function score(images, labels, signal) {
     disconnected: new Float32Array(labels.length),
     profiles: new Float32Array(labels.length * 4),
     shade: new Float32Array(labels.length * 2),
+    halo: new Float32Array(labels.length),
   };
   const batchSize = 256;
   for (let start = 0; start < labels.length; start += batchSize) {
@@ -118,6 +119,7 @@ async function score(images, labels, signal) {
     outputs.disconnected.set(result.disconnected.data, start);
     outputs.profiles.set(result.profiles.data, start * 4);
     outputs.shade.set(result.shade.data, start * 2);
+    outputs.halo.set(result.halo.data, start);
     await new Promise(resolve => setTimeout(resolve, 0));
   }
   return outputs;
@@ -143,6 +145,7 @@ async function qualityGenerate(classes, requestedPerClass, seed, signal) {
     strokeShadeCvThresholds: settings.sampling.stroke_shade_cv_thresholds,
     strokeShadeDipThresholds: settings.sampling.stroke_shade_dip_thresholds,
     strokeShadeRejectionMultiplier: settings.sampling.stroke_shade_rejection_multiplier,
+    strokeHaloThresholds: settings.sampling.stroke_halo_thresholds,
   });
   const images = new Float32Array(selected.length * 28 * 28);
   selected.forEach((candidate, outputIndex) => {

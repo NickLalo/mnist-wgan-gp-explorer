@@ -23,8 +23,10 @@ test('an explicit class failure is replaced by the best backup candidate', () =>
     disconnected: new Float32Array(3),
     profiles: new Float32Array(12),
     shade: new Float32Array(6),
+    halo: new Float32Array(3),
     strokeShadeCvThresholds: Array(10).fill(1),
     strokeShadeDipThresholds: Array(10).fill(1),
+    strokeHaloThresholds: Array(10).fill(1),
   });
   assert.deepEqual(selected, [1, 2]);
 });
@@ -46,9 +48,34 @@ test('an excessive centerline shade dip is replaced by a backup candidate', () =
     disconnected: new Float32Array(3),
     profiles: new Float32Array(12),
     shade,
+    halo: new Float32Array(3),
     strokeShadeCvThresholds: Array(10).fill(1),
     strokeShadeDipThresholds: Array(10).fill(0.1),
     strokeShadeRejectionMultiplier: 1,
+    strokeHaloThresholds: Array(10).fill(1),
+  });
+  assert.deepEqual(selected, [1, 2]);
+});
+
+test('an excessive pale outer halo is replaced by a backup candidate', () => {
+  const labels = [6, 6, 6];
+  const logits = new Float32Array(30);
+  logits[6] = 10;
+  logits[16] = 10;
+  logits[26] = 10;
+  const selected = selectQualityIndices({
+    labels,
+    keepPerClass: 2,
+    criticScores: new Float32Array([2, 1, 0]),
+    logits,
+    unsupported: new Float32Array(3),
+    disconnected: new Float32Array(3),
+    profiles: new Float32Array(12),
+    shade: new Float32Array(6),
+    halo: new Float32Array([0.2, 0, 0]),
+    strokeShadeCvThresholds: Array(10).fill(1),
+    strokeShadeDipThresholds: Array(10).fill(1),
+    strokeHaloThresholds: Array(10).fill(0.1),
   });
   assert.deepEqual(selected, [1, 2]);
 });

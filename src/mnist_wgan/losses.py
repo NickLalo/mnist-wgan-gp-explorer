@@ -248,6 +248,62 @@ class StrokeShadeLoss(nn.Module):
         )
 
 
+def stroke_halo_statistics(
+    images: Tensor,
+    *,
+    low_threshold: float = 0.05,
+    core_threshold: float = 0.55,
+    temperature: float = 0.025,
+    detach_geometry: bool = False,
+) -> Tensor:
+    """Measure pale ink two pixels beyond the strongly supported stroke core.
+
+    MNIST contains normal one-pixel antialiasing, so the statistic ignores the
+    immediate boundary around strong ink. It isolates only low-to-medium tone
+    in the next morphological ring, normalized by total ink so the value is
+    comparable across thin and heavy handwriting styles.
+    """
+    if not 0.0 <= low_threshold < core_threshold <= 1.0:
+        raise ValueError("halo thresholds must satisfy 0 <= low < core <= 1")
+    if temperature <= 0.0:
+        raise ValueError("temperature must be positive")
+    ink = images.float().add(1.0).mul(0.5).clamp(0.0, 1.0)
+    core = torch.sigmoid((ink - core_threshold) / temperature)
+    geometry = core.detach() if detach_geometry else core
+    immediate_support = F.max_pool2d(geometry, kernel_size=3, stride=1, padding=1)
+    extended_support = F.max_pool2d(geometry, kernel_size=5, stride=1, padding=2)
+    outer_ring = extended_support * (1.0 - immediate_support)
+    soft_ink = torch.sigmoid((ink - low_threshold) / temperature) * torch.sigmoid(
+        (core_threshold - ink) / temperature
+    )
+    halo_mass = (ink * soft_ink * outer_ring).flatten(1).sum(dim=1)
+    total_ink = ink.flatten(1).sum(dim=1).clamp_min(1.0)
+    if detach_geometry:
+        total_ink = total_ink.detach()
+    return halo_mass / total_ink
+
+
+class StrokeHaloLoss(nn.Module):
+    """Suppress generated outer-stroke halos beyond the real MNIST envelope."""
+
+    def __init__(self, tail_fraction: float = 0.50) -> None:
+        super().__init__()
+        if not 0.0 < tail_fraction <= 1.0:
+            raise ValueError("tail_fraction must be in (0, 1]")
+        self.tail_fraction = tail_fraction
+
+    def _statistics(self, images: Tensor, *, detach_geometry: bool = False) -> Tensor:
+        return stroke_halo_statistics(images, detach_geometry=detach_geometry)
+
+    def forward(self, real: Tensor, fake: Tensor, labels: Tensor) -> Tensor:
+        return _classwise_upper_tail_excess_loss(
+            self._statistics(real),
+            self._statistics(fake, detach_geometry=True),
+            labels,
+            self.tail_fraction,
+        )
+
+
 class StrokeProfileLoss(nn.Module):
     """Match per-class stroke-width, strength, and centerline distributions.
 

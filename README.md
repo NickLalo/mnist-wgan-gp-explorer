@@ -137,11 +137,12 @@ the local evaluation classifier from `artifacts/classifier.pt`, or trains and sa
 
 Raw checkpoint evaluation is the default. The **All digits** and **One digit** UI views additionally
 generate a small backup pool and replace only samples that cross strict class, critic, detached-
-stroke, or severe stroke-shade failure checks. Shade continuity also contributes a small ranking
-signal when a replacement is already needed. This is deterministic for a given seed and
-intentionally much narrower than keeping a fixed top percentage. The **Latent explorer** remains
-unfiltered so it exposes the generator directly. To audit the UI-like sampling path quantitatively,
-run:
+stroke, severe stroke-shade, or pale outer-halo failure checks. Shade continuity and outer-halo
+mass also contribute small ranking signals when a replacement is already needed. The halo boundary
+is calibrated per digit from the 98th percentile of all 60,000 MNIST training images. This is
+deterministic for a given seed and intentionally much narrower than keeping a fixed top percentage.
+The **Latent explorer** remains unfiltered so it exposes the generator directly. To audit the
+UI-like sampling path quantitatively, run:
 
 ```bash
 uv run mnist-wgan-evaluate --quality-oversample 1.2
@@ -205,21 +206,24 @@ construction and [`index.html`](src/mnist_wgan/static/index.html) for interactio
 
 ## Evaluation results
 
-The seed-112 evaluation report contains results for 8,000 unfiltered images generated with EMA
-weights—800 for each digit.
+The seed-112 evaluation report contains results for 8,000 images generated with EMA weights, 800
+for each digit, using the same 1.2x conservative candidate pool as the **All digits** and **One
+digit** views.
 
 | Metric | Result | Better | Interpretation |
 |---|---:|:---:|---|
-| Project-calibrated quality score | **98.57 / 100** | Higher | Weighted, MNIST-specific diagnostic described below |
+| Project-calibrated quality score | **98.08 / 100** | Higher | Weighted, MNIST-specific diagnostic described below |
 | Conditional accuracy | **99.98%** | Higher | Samples classified as the requested digit |
-| Manifold precision | **95.24%** | Higher | Generated embeddings inside their real-class neighborhood |
-| Worst-digit precision | **92.75%** | Higher | Lowest manifold precision among the ten classes |
-| Manifold recall | **80.12%** | Higher | Real reference embeddings reached by at least one generated neighborhood |
-| Real-manifold coverage | **89.94%** | Higher | Real reference embeddings reached by generated samples |
-| Stroke-profile tail | **6.53%** | Lower | Samples outside the central real-data range for width, strength, or centerline extent |
-| Stroke-shade tail | **2.24%** | Lower | Samples exceeding a per-digit real-data 99th percentile for local centerline tone variation |
-| Fragmented samples | **0.39%** | Lower | Images with over 2% of thresholded ink outside the largest connected stroke |
-| Class-wise ink error | **2.12%** | Lower | Mean relative foreground-mass mismatch across classes |
+| Manifold precision | **95.69%** | Higher | Generated embeddings inside their real-class neighborhood |
+| Worst-digit precision | **94.38%** | Higher | Lowest manifold precision among the ten classes |
+| Manifold recall | **78.56%** | Higher | Real reference embeddings reached by at least one generated neighborhood |
+| Real-manifold coverage | **90.15%** | Higher | Real reference embeddings reached by generated samples |
+| Stroke-profile tail | **7.09%** | Lower | Samples outside the central real-data range for width, strength, or centerline extent |
+| Stroke-shade tail | **0.99%** | Lower | Samples exceeding a per-digit real-data 99th percentile for local centerline tone variation |
+| Outer-halo rate | **5.12%** | Lower | Samples with more than 0.1% of their ink in the pale second ring outside the core stroke |
+| Severe outer-halo rate | **0.09%** | Lower | Samples with more than 0.5% of their ink in that outer ring |
+| Fragmented samples | **0.15%** | Lower | Images with over 2% of thresholded ink outside the largest connected stroke |
+| Class-wise ink error | **3.15%** | Lower | Mean relative foreground-mass mismatch across classes |
 
 The score combines conditional accuracy (20%), manifold precision (20%), coverage (15%),
 classifier-feature Fréchet distance (15%), stroke integrity (20%), and ink calibration (10%). Each
@@ -264,6 +268,11 @@ distribution-level comparisons rather than paired reconstruction.
   one-sided class-wise tail loss suppresses only generated discontinuities beyond the real-data
   tail, while a zero-mean gradient projection prevents global darkening as a shortcut. It is
   available through `--stroke-shade-weight` and remains off unless explicitly selected.
+- **Stroke halo:** differentiated morphology ignores normal one-pixel antialiasing, then measures
+  low-to-medium ink in the next ring outside strongly supported strokes. A one-sided class-wise
+  tail loss penalizes only excess beyond real MNIST, avoiding a global sharpening objective that
+  would erase legitimate light handwriting. It is available through `--stroke-halo-weight` and
+  remains off unless explicitly selected.
 - **Scheduling:** distribution and diversity terms ramp in over training, and an EMA copy of the
   generator supplies evaluation and UI output.
 
@@ -321,16 +330,16 @@ data/                 Downloaded MNIST files (Git-ignored)
 
 The metrics above were produced by the model state included in the repository:
 
-- checkpoint: `checkpoints/mnist-wgan-gp-inference.ckpt` (epoch 35, global step 14,980);
-- checkpoint size: 12,001,381 bytes;
-- SHA-256: `1f2b21d84581ad96dd9c8bf7ff15c7f7f3a87029162d2e10e511adffa18524aa`;
+- checkpoint: `checkpoints/mnist-wgan-gp-inference.ckpt` (epoch 37, global step 15,836);
+- checkpoint size: 12,001,509 bytes;
+- SHA-256: `ea7178515849d194ecc8a88a3f83960c210c73b632a4db148c8988d475c66ec0`;
 - evaluation seed: 112;
 - evaluation samples: 800 per digit, 8,000 total;
 - generated weights: EMA;
 - reference data: class-balanced samples from the full 60,000-image MNIST training set;
 - calibration data: class-balanced samples from the 10,000-image MNIST test set;
 - evaluation classifier test accuracy recorded in the report: 99.47%;
-- saved report: `artifacts/ink_shade/shade_w2_centered/evaluation_epoch34_seed112.json`
+- saved report: `artifacts/stroke_halo/final_p980/report.json`
   (local and Git-ignored).
 
 Reproduce the reported evaluation with:
@@ -338,9 +347,10 @@ Reproduce the reported evaluation with:
 ```bash
 uv run mnist-wgan-evaluate \
   --checkpoint checkpoints/mnist-wgan-gp-inference.ckpt \
-  --output artifacts/ink_shade/evaluation_seed112.json \
+  --output artifacts/stroke_halo/evaluation_seed112.json \
   --samples-per-digit 800 \
-  --seed 112
+  --seed 112 \
+  --quality-oversample 1.2
 ```
 
 <details>
@@ -361,6 +371,7 @@ distribution_ramp_epochs=5        ink_weight=10.0
 stroke_support_weight=10.0        class_footprint_weight=5.0
 connectivity_weight=5.0           stroke_profile_weight=10.0
 stroke_shade_weight=2.0           stroke_shade_tail_fraction=0.25
+stroke_halo_weight=100.0          stroke_halo_tail_fraction=0.50
 ema_decay=0.995
 ```
 
@@ -430,5 +441,6 @@ where this implementation changes those ideas, and which additions were develope
 | Stroke-integrity losses | Designed for this MNIST implementation to match class-wise ink, local support, footprint, and differentiable connectivity statistics. | Project-specific training objectives |
 | Soft-centerline stroke profiles | Adapts differentiable morphological skeletonization from soft-clDice, then uses it in an unpaired class-wise distribution loss for stroke width, strength, and extent rather than as a paired segmentation loss. | Adapted from [clDice: A Novel Topology-Preserving Loss Function for Tubular Structure Segmentation](https://openaccess.thecvf.com/content/CVPR2021/html/Shit_clDice_-_A_Novel_Topology-Preserving_Loss_Function_for_Tubular_Structure_CVPR_2021_paper.html) |
 | Centerline shade continuity | Uses the soft centerline above with an occupancy-normalized local-tone statistic, then applies a project-specific one-sided real-data tail objective. The separation of local tone from stroke geometry is informed by structure-aware smoothness work, but this exact MNIST loss and its zero-mean gradient projection are project-specific. | Informed by [Deep Retinex Decomposition for Low-Light Enhancement](https://bmvc2018.org/contents/papers/0451.pdf) and soft-clDice |
+| Outer-halo suppression | Adapts differentiable boundary and morphological ideas to measure pale ink in the second ring outside a strongly supported stroke. The one-sided class-wise tail objective and MNIST calibration are project-specific. | Informed by [Boundary loss for highly unbalanced segmentation](https://proceedings.mlr.press/v102/kervadec19a.html), [soft-clDice](https://openaccess.thecvf.com/content/CVPR2021/html/Shit_clDice_-_A_Novel_Topology-Preserving_Loss_Function_for_Tubular_Structure_CVPR_2021_paper.html), and [Active Boundary Loss](https://arxiv.org/abs/2102.02696) |
 | Selective UI resampling | Inspired by discriminator rejection sampling, but does not implement its density-ratio acceptance rule. This project keeps the initial sample set, scores a small backup pool with conditional, critic, and stroke evidence, and replaces only explicit failures. | Conservative project adaptation inspired by [Discriminator Rejection Sampling](https://openreview.net/forum?id=S1GkToR5tm) |
 | Calibrated quality score | Designed for this project as a weighted diagnostic normalized against class-balanced real MNIST; it is not a standardized GAN benchmark. | Project-specific evaluation summary |

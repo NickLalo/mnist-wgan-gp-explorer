@@ -2,10 +2,12 @@
 
 This directory builds a static version of the MNIST WGAN-GP Explorer for GitHub Pages. The EMA
 generator and quality scorer run with ONNX Runtime inside the visitor's browser. WebGPU browsers
-use the float32 graphs; Firefox and mobile browsers use static uint8 exports. The two compact CPU
-graphs are smaller together than the former float32 generator-only download, so every browser can
-use the critic, class margin, stroke checks, and shade-continuity evidence. Generated images,
-labels, seeds, and latent coordinates are never sent to an inference server.
+use the float32 graphs; Firefox and mobile browsers use static uint8 exports. The quality scorer
+keeps its small, rank-sensitive final critic block in float32 while quantizing the earlier
+convolutions and classifier. The two compact CPU graphs total about 3.69 MB, 58% less than their
+float32 equivalents, so every browser can use the critic, class margin, stroke checks, shade
+continuity, and outer-halo evidence. Generated images, labels, seeds, and latent coordinates are
+never sent to an inference server.
 
 The browser application deliberately remains separate from the FastAPI application. During a
 build, `scripts/prepare-index.mjs` reuses the established HTML and CSS from
@@ -41,7 +43,8 @@ uv run --group browser-export python scripts/export_browser_models.py
 ```
 
 The exporter validates the float32 graphs, creates calibrated per-channel uint8 Conv/linear graphs
-for WebAssembly, checks their numeric error budgets, and records every model and checkpoint hash in
+for WebAssembly, preserves the scorer tail needed to maintain critic ordering, checks numeric and
+ranking error budgets, and records every model and checkpoint hash in
 `public/models/manifest.json`. Commit the refreshed model files and manifest together.
 
 Browser seeds are stable within this application, but its small JavaScript Gaussian generator is

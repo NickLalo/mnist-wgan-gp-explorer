@@ -52,6 +52,8 @@ def train() -> None:
     parser.add_argument("--stroke-profile-weight", type=float, default=10.0)
     parser.add_argument("--stroke-shade-weight", type=float, default=0.0)
     parser.add_argument("--stroke-shade-tail-fraction", type=float, default=0.25)
+    parser.add_argument("--stroke-halo-weight", type=float, default=0.0)
+    parser.add_argument("--stroke-halo-tail-fraction", type=float, default=0.50)
     parser.add_argument("--seed", type=int, default=112)
     parser.add_argument("--data-dir", default="data")
     parser.add_argument("--artifacts-dir", default="artifacts")
@@ -103,6 +105,8 @@ def train() -> None:
         stroke_profile_weight=args.stroke_profile_weight,
         stroke_shade_weight=args.stroke_shade_weight,
         stroke_shade_tail_fraction=args.stroke_shade_tail_fraction,
+        stroke_halo_weight=args.stroke_halo_weight,
+        stroke_halo_tail_fraction=args.stroke_halo_tail_fraction,
     )
     if args.perceptual_distribution_weight > 0 or args.perceptual_tail_weight > 0:
         perceptual_encoder, perceptual_accuracy = ensure_classifier(

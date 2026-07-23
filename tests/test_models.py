@@ -2,6 +2,7 @@ import torch
 
 from mnist_wgan.losses import (
     BatchStructureLoss,
+    StrokeHaloLoss,
     StrokeIntegrityLoss,
     StrokeProfileLoss,
     StrokeShadeLoss,
@@ -40,6 +41,7 @@ def test_regularizers_are_finite_and_differentiable():
     ink, support, footprint, connectivity = StrokeIntegrityLoss()(real, fake, labels)
     stroke_profile = StrokeProfileLoss()(real, fake, labels)
     stroke_shade = StrokeShadeLoss()(real, fake, labels)
+    stroke_halo = StrokeHaloLoss()(real, fake, labels)
     second = torch.randn_like(fake).tanh()
     diversity = mode_seeking_loss(fake, second, torch.randn(4, 16), torch.randn(4, 16))
     diversity_match, _, _ = diversity_matching_loss(real, fake, second, labels)
@@ -63,6 +65,7 @@ def test_regularizers_are_finite_and_differentiable():
         + connectivity
         + stroke_profile
         + stroke_shade
+        + stroke_halo
         + diversity_match
         - 0.1 * diversity
     )
@@ -85,9 +88,26 @@ def test_regularizers_are_finite_and_differentiable():
             connectivity,
             stroke_profile,
             stroke_shade,
+            stroke_halo,
         )
     )
     total.backward()
+
+
+def test_stroke_halo_loss_targets_only_the_outer_pale_ring():
+    real = torch.full((2, 1, 28, 28), -1.0)
+    real[:, :, 6:22, 13:16] = 1.0
+    fake = real.clone()
+    # A pale line two pixels from the core is outside normal one-pixel
+    # antialiasing support and should produce a removal gradient.
+    fake[0, :, 6:22, 11] = -0.4
+    fake.requires_grad_(True)
+    labels = torch.tensor([0, 0])
+    loss = StrokeHaloLoss(tail_fraction=1.0)(real, fake, labels)
+    loss.backward()
+    assert loss > 0
+    assert fake.grad[0, 0, 10, 11] > 0
+    assert fake.grad[0, 0, 10, 14].abs() < 1e-7
 
 
 def test_quality_sampler_keeps_balanced_classes_in_original_order():
